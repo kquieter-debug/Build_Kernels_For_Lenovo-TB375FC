@@ -93,6 +93,7 @@ jobs:
       - name: 初始化 MT6897 编译环境
         run: |
           echo -e "✅ 初始化一加MT6897内核编译环境 [Android 15 | ARM64 | Rust Enabled]"
+          rm -rf out/
           mkdir -p out/prebuilts
           # 加载Rust环境变量
           source $HOME/.cargo/env
