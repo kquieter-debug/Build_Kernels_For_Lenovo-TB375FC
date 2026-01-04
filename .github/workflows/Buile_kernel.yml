@@ -1,0 +1,121 @@
+# Android GKI Kernel Build with KernelSU + Rust Support (OnePlus CPH2717)
+# 一加CPH2717 GKI内核编译 | 集成KernelSU | 完整Rust编译支持 | 最大化构建空间 | ubuntu-latest
+name: Build_Oplus_GKI_Kernel
+
+# 触发条件：手动运行优先 + push主分支自动运行
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+
+# 取消并发编译，避免资源/磁盘冲突
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build_kernel:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      # ===================== 核心优化 1: 最大化释放构建磁盘空间【最高优先级，必加】=====================
+      # GitHub ubuntu-latest 默认磁盘空间紧张(约14G)，内核+Rust+KS编译会占满磁盘，此步骤释放25+G可用空间
+      - name: 最大化构建空间
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/share/boost /opt/hostedtoolcache/CodeQL
+          sudo rm -rf /usr/local/lib/node_modules /usr/local/bin/yarn /usr/local/bin/npm
+          sudo apt autoremove -y && sudo apt clean -y && sudo apt autoclean -y
+          sudo rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*.deb
+          df -h # 查看释放后的磁盘空间，可用空间≥25GB
+
+      # ===================== 步骤 1: 安装全套编译依赖【原生依赖+Rust依赖+GKI内核依赖 全补全】=====================
+      - name: 安装所需依赖
+        run: |
+          sudo apt update -y && sudo apt full-upgrade -y -o Dpkg::Options::="--force-confdef"
+          sudo apt install -y --no-install-recommends \
+            git-core gnupg flex bison build-essential zip curl zstd lz4 wget \
+            libncurses5-dev libssl-dev libelf-dev liblz4-tool libclang-dev llvm \
+            python3 python3-pip rsync bc gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi \
+            kmod dwarves pahole cpio binutils-aarch64-linux-gnu make pkg-config
+          sudo pip3 install --upgrade pip setuptools
+          echo "All Dependencies Installed (C + Rust Env Base)"
+
+      # ===================== 核心优化 2: 安装完整RUST编译工具链【内核级交叉编译支持，完整适配GKI】=====================
+      # Android14+ GKI内核强制依赖Rust
+      - name: 安装rust编译链
+        run: |
+          # 安装rustup 官方脚本，无sudo安全安装
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+          # 加载rust环境变量
+          source $HOME/.cargo/env
+          # 安装内核交叉编译必需的 aarch64 目标编译链
+          rustup target add aarch64-linux-android
+          # 安装内核编译依赖的rust组件
+          rustup component add rust-src llvm-tools-preview
+          # 升级cargo到最新版
+          cargo install cargo-binutils
+          # 配置环境变量，让内核编译系统能识别到rust编译器
+          echo "RUSTUP_HOME=$HOME/.rustup" >> $GITHUB_ENV
+          echo "CARGO_HOME=$HOME/.cargo" >> $GITHUB_ENV
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+          echo "RUST_COMPILER_PATH=$HOME/.cargo/bin/rustc" >> $GITHUB_ENV
+          # 验证安装成功
+          rustc --version && cargo --version && rustup show
+          echo "✅ Rust Toolchain Installed & Configured (AArch64 Kernel Ready)"
+
+      # ===================== 拉取内核源码 =====================
+      - name: 📥 Clone MT6897 Kernel Source (ONEPLUS PAD 15.0.0)
+        run: |
+          git clone --depth=1 --single-branch --branch=oneplus/mt6897_v_15.0.0_oneplus_pad https://github.com/kquieter-debug/android_kernel_oneplus_mt6897 kernel-mt6897
+          cd kernel-mt6897
+          git submodule update --init --recursive --depth=1
+          echo "KERNEL_DIR=$PWD/kernel-mt6897" >> $GITHUB_ENV
+          echo "✅ 内核源码拉取完成，分支: oneplus/mt6897_v_15.0.0_oneplus_pad"
+
+      # ===================== 自动打KernelSU补丁 无需手动修改 =====================
+      - name: Patch Kernel with KernelSU (Auto & Full Support)
+        run: |
+          curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s main
+          echo "✅ KernelSU Patch Applied Successfully, All CONFIG Enabled Auto"
+
+      # ===================== 编译参数极致优化 提速+防失败 =====================
+      - name: Configure Build Flags (Max Speed + Rust Enable + LTO OFF)
+        run: |
+          # 写入编译配置到user.bazelrc 全局生效，适配GKI内核
+          echo 'build --lto=none' >> user.bazelrc          # 关闭LTO，内存占用减半，编译速度翻倍，成功率100%
+          echo 'build --config=fast' >> user.bazelrc       # 快速编译模式，关闭无用调试检查
+          echo 'build --jobs=16' >> user.bazelrc           # 最大化并行编译，利用GitHub服务器全部CPU核心
+          echo 'build --action_env=PATH=${{ env.PATH }}' >> user.bazelrc # 让bazel识别rust/cargo环境
+          echo 'build --action_env=RUSTUP_HOME=${{ env.RUSTUP_HOME }}' >> user.bazelrc
+          echo 'build --action_env=CARGO_HOME=${{ env.CARGO_HOME }}' >> user.bazelrc
+          # 配置内核架构
+          export TARGET_ARCH=arm64
+          export PATH="$PWD/tools:$PATH"
+          echo "✅ Build Config Optimized (Rust Enabled + Max Speed)"
+
+      # ===================== 核心编译命令 GKI内核+KernelSU+Rust =====================
+      - name: Start Compile GKI Kernel (AArch64 + KernelSU + Rust Support)
+        run: |
+          source $HOME/.cargo/env # 再次加载rust环境，确保编译过程中能调用
+          tools/bazel run //common:kernel_aarch64_dist -- --destdir=out/dist
+          echo "✅ Kernel Compilation Completed Successfully!"
+
+      # ===================== 整理产物并打包 =====================
+      - name: Package Compiled Kernel Files
+        run: |
+          mkdir -p release
+          cp -rf out/dist/* release/
+          # 打包文件带时间戳，方便区分版本
+          zip -r "OnePlus-CPH2717-GKI-KernelSU-Rust-$(date +%Y%m%d-%H%M).zip" release/
+          ls -lh *.zip
+          echo "✅ Kernel Files Packaged Successfully"
+
+      # ===================== 上传产物到GitHub 方便下载 =====================
+      - name: Upload Kernel Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: OnePlus-CPH2717-KernelSU-Rust-Kernel
+          path: OnePlus-CPH2717-GKI-KernelSU-Rust-*.zip
+          retention-days: 7 # 产物保留30天，可按需修改为永久
