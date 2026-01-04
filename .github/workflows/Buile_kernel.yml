@@ -79,9 +79,9 @@ jobs:
           echo "✅ 内核源码拉取完成，分支: oneplus/mt6897_v_15.0.0_oneplus_pad"
 
       # ===================== 自动打KernelSU补丁 无需手动修改 =====================
-      - name: 安装KernelSU
+      - name: 安装SukiSU-Ultra
         run: |
-          curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s main
+          curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s susfs-dev
           echo "✅ KernelSU Patch Applied Successfully, All CONFIG Enabled Auto"
 
       # ===================== 编译参数极致优化 提速+防失败 =====================
