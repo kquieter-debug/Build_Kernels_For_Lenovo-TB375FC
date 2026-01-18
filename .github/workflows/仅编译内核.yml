@@ -1,152 +1,81 @@
-name: 仅编译内核
+name: Build OnePlus Pad Kernel (mt6897) with Rust Support
 on:
-  workflow_dispatch: # 手动触发编译，必备
+  workflow_dispatch:    #手动触发编译
+
+env:
+  KERNEL_REPO: "https://github.com/kquieter-debug/android_kernel_oneplus_mt6897.git"      # 内核仓库位置
+  KERNEL_BRANCH: "oneplus/mt6897_v_15.0.0_oneplus_pad"
+  DIST_DIR: "${{ github.workspace }}/out/dist"  # 编译输出目录
+  RUST_VERSION: "1.70.0"      # Rust 版本声明
 
 jobs:
   build_kernel:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120       # 设置超时时间
     steps:
-      # ========== 【核心第一步：精准拉取你的MT6897内核源码】 ==========
-      - name: 检出 一加MT6897 内核源码
-        uses: actions/checkout@v4
-        with:
-          repository: kquieter-debug/android_kernel_oneplus_mt6897 # 你的源码仓库地址
-          ref: oneplus/mt6897_v_15.0.0_oneplus_pad # 你的内核源码分支，精准匹配
-          fetch-depth: 1
-          submodules: recursive # 你的源码有子模块，必须开启，防止编译缺失文件
-
-      # ========== 【缓存1：Ubuntu系统依赖包 无废弃参数 修复Bazel报错】 ==========
-      - name: 缓存 & 安装系统编译依赖
-        uses: awalsh128/cache-apt-pkgs-action@latest
-        with:
-          packages: gcc g++ make perl python3 bc bison flex libssl-dev libelf-dev dwarves git curl wget zip unzip build-essential ccache rsync gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
-          version: 1.0
-
-      # ========== 【修复Bazel：独立安装官方版 解决找不到包问题】 ==========
-      - name: 安装 Bazel 编译工具
+      - name: 安装依赖
         run: |
-          curl -fsSL https://bazel.build/bazel-release.pub.gpg | gpg --dearmor > bazel.gpg
-          sudo mv bazel.gpg /etc/apt/trusted.gpg.d/
-          echo "deb [arch=amd64] https://storage.googleapis.com/bazel-apt stable jdk1.8" | sudo tee /etc/apt/sources.list.d/bazel.list
-          sudo apt update && sudo apt install -y bazel
+          sudo apt update && sudo apt upgrade -y
+          sudo apt install -y \
+            git python3 python3-pip openjdk-17-jdk flex bison bc \
+            libssl-dev libelf-dev repo curl wget zip unzip \
+            ninja-build pkg-config libc6-dev-i386 \
+            clang llvm lld make gcc-aarch64-linux-gnu
+          # 清理缓存，避免依赖冲突
+          sudo apt autoremove -y && sudo apt clean
 
-      # ========== 【缓存2：Rust编译链缓存 A15内核强制依赖 重中之重】 ==========
-      - name: 缓存 Rust 编译链
-        uses: actions/cache@v4
-        id: rust-cache
+      - name: 安装 Rust 编译链（适配 Android GKI）
+        uses: dtolnay/rust-toolchain@master
         with:
-          path: |
-            ~/.cargo
-            ~/.rustup
-          key: ${{ runner.os }}-mt6897-rust-${{ hashFiles('**/rust-version.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-mt6897-rust-
-
-      # ========== 【安装Rust编译链 内核A15必备组件 完整无缺】 ==========
-      - name: 安装 Rust 环境
-        if: steps.rust-cache.outputs.cache-hit != 'true'
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: aarch64-linux-android
+          components: rust-src, rustfmt, clippy
+          
+      - name: 配置 Rust 环境
         run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
-          source $HOME/.cargo/env
-          rustup component add rust-src llvm-tools-preview rustfmt clippy
-          cargo install bindgen-cli
-          rustc --version && cargo --version
+          echo "RUSTC=$(which rustc)" >> $GITHUB_ENV
+          echo "CARGO=$(which cargo)" >> $GITHUB_ENV
+          echo "RUST_TARGET_PATH=$(rustc --print sysroot)/lib/rustlib/src/rust/library/std/src/lib.rs" >> $GITHUB_ENV
+          # 验证 Rust 安装
+          rustc --version
+          cargo --version
 
-      # ========== 【缓存3：CCache核心缓存 提速90% 内核编译的灵魂】 ==========
-      - name: 配置 CCache 编译缓存
-        uses: hendrikmuhs/ccache-action@v1.2
-        with:
-          key: ${{ runner.os }}-mt6897-ccache-${{ github.sha }}
-          restore-keys: ${{ runner.os }}-mt6897-ccache-
-          max-size: 15G # 给足缓存空间，MT6897内核编译产物大，15G刚好
-
-      # ========== 【缓存4：内核编译产物+配置缓存 out目录+defconfig+.config】 ==========
-      - name: 缓存 内核编译产物 & 配置文件
-        uses: actions/cache@v4
-        id: kernel-build-cache
-        with:
-          path: |
-            out
-            .config
-            arch/arm64/configs
-            arch/arm64/boot/dts
-          key: ${{ runner.os }}-mt6897-build-${{ hashFiles('.config', 'Makefile', 'arch/arm64/configs/*defconfig') }}
-          restore-keys: |
-            ${{ runner.os }}-mt6897-build-
-
-      # ========== 【缓存5：你的源码自带编译工具链缓存 无需重复下载解压】 ==========
-      - name: 缓存
-        uses: actions/cache@v4
-        id: toolchain-cache
-        with:
-          path: |
-            prebuilts
-            clang
-            gcc
-          key: ${{ runner.os }}-mt6897-toolchain-${{ hashFiles('prebuilts/**/version') }}
-          restore-keys: |
-            ${{ runner.os }}-mt6897-toolchain-
-
-      # ========== 【初始化编译环境 加载所有依赖+配置最优编译参数】 ==========
-      - name: 初始化 MT6897 编译环境
+      - name: 拉取内核源码
         run: |
-          echo -e "✅ 初始化一加MT6897内核编译环境 [Android 15 | ARM64 | Rust Enabled]"
-          rm -rf out/
-          mkdir -p out/prebuilts
-          # 加载Rust环境变量
-          source $HOME/.cargo/env
-          # 核心CCache配置 双缓存C/C++和Rust
-          export CCACHE_EXEC=$(which ccache)
-          export USE_CCACHE=1
-          export CCACHE_DIR=${{ github.workspace }}/.ccache
-          export CCACHE_MAXSIZE=15G
-          export RUSTC_WRAPPER=ccache
-          export CARGO_INCREMENTAL=1
-          # CCache最优参数 提高命中率
-          ccache -M 15G && ccache -z && ccache -o compression=true -o compression_level=6
-          # 内核编译核心环境变量
-          export ARCH=arm64
-          export SUBARCH=arm64
-          export KBUILD_BUILD_USER=kquieter
-          export KBUILD_BUILD_HOST=github-actions
-          # 目录权限修复
-          chmod -R 777 out/ prebuilts/ scripts/ || true
-          chmod -R +x scripts/ || true
-          # 打印环境信息 方便调试
-          ccache -s && rustc --version && bazel --version
-          echo -e "✅ 编译环境初始化完成"
+          mkdir -p ${{ github.workspace }}/kernel
+          git clone --depth=1 --branch=${{ env.KERNEL_BRANCH }} ${{ env.KERNEL_REPO }} ${{ github.workspace }}/kernel
+          cd ${{ github.workspace }}/kernel
+          # 检查分支是否正确
+          git branch -v
 
-      # ========== 【核心编译步骤 适配你的MT6897内核 无需修改】 ==========
-      - name: 编译 一加MT6897 内核
+      - name: 安装 Bazelisk（适配内核的 Bazel 版本）
         run: |
-          # 加载依赖环境
-          source $HOME/.cargo/env
-          export ARCH=arm64
-          export SUBARCH=arm64
-          # 调用你源码自带的交叉编译链 精准匹配
-          export CROSS_COMPILE=aarch64-linux-gnu-
-          export CC="ccache clang"
-          export CXX="ccache clang++"
-          # 生成内核配置 (你的MT6897内核defconfig，通用名，无需修改)
-          make -j$(nproc) O=out vendor/mt6897_defconfig
-          # 编译内核核心产物 Image.gz-dtb+模块+设备树 适配你的平板
-          make -j$(nproc) O=out Image.gz-dtb modules dtbs 2>&1 | tee build.log
+          curl -LO https://github.com/bazelbuild/bazelisk/releases/latest/download/bazelisk-linux-amd64
+          chmod +x bazelisk-linux-amd64
+          sudo mv bazelisk-linux-amd64 /usr/local/bin/bazel
+          # 验证 Bazel
+          bazel --version
 
-      # ========== 【缓存统计 查看命中率 清理无用缓存】 ==========
-      - name: 编译完成 - 缓存统计
+      - name: 编译内核（启用 Rust 支持）
         run: |
-          ccache -s
-          echo "✅ 本次编译CCache命中率: $(ccache -s | grep 'hit rate' | awk '{print $4}')"
-          ccache -c && ccache -z
+          cd ${{ github.workspace }}/kernel
+          # 创建输出目录
+          mkdir -p ${{ env.DIST_DIR }}
+          # 编译命令：启用 Rust，指定 aarch64 架构，输出到指定目录
+          tools/bazel run //common:kernel_aarch64_dist \
+            --define=rustc_path=${{ env.RUSTC }} \
+            --define=cargo_path=${{ env.CARGO }} \
+            --define=enable_rust=1 \
+            --lto=thin \
+            -- --destdir=${{ env.DIST_DIR }}
+          # 验证编译产物
+          ls -lh ${{ env.DIST_DIR }}
 
-      # ========== 【上传编译产物 精准指向你的内核镜像路径】 ==========
-      - name: 上传 MT6897 内核编译产物
+      - name: 上传编译产物
         uses: actions/upload-artifact@v4
         with:
-          name: OnePlus-MT6897-Kernel-A15
+          name: oneplus-pad-mt6897-kernel-${{ github.sha }}
           path: |
-            out/arch/arm64/boot/Image.gz-dtb
-            out/arch/arm64/boot/dts/
-            out/*.ko
+            ${{ env.DIST_DIR }}/*
+            !${{ env.DIST_DIR }}/*.log  # 排除日志文件
+          retention-days: 14  # 产物保留14天
