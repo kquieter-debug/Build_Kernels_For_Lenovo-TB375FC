@@ -76,6 +76,7 @@ jobs:
             git branch -v
             # 确认tools/bazel文件存在（谷歌内核源码标配）
             ls -lh tools/bazel || echo "警告：未找到bazel编译脚本，需确认内核源码适配Bazel编译"
+            mkdir -p "/home/runner/work/Build_kernel-oplus_For_Lenovo-TB375FC/Build_kernel-oplus_For_Lenovo-TB375FC/cmake-data"
 
       - name: 从清华镜像克隆llvm-project源码（替代预编译Clang）
         run: |
@@ -89,7 +90,7 @@ jobs:
         run: |
             # 创建编译目录
             mkdir -p ${{ env.LLVM_BUILD_DIR }}
-            mkdir -p "/home/runner/work/Build_kernel-oplus_For_Lenovo-TB375FC/Build_kernel-oplus_For_Lenovo-TB375FC/cmake-data"
+            #mkdir -p "/home/runner/work/Build_kernel-oplus_For_Lenovo-TB375FC/Build_kernel-oplus_For_Lenovo-TB375FC/cmake-data"
             cd ${{ env.LLVM_BUILD_DIR }}
             # 配置cmake（仅编译Clang/LLVM，适配aarch64安卓交叉编译）
             cmake -G Ninja \
