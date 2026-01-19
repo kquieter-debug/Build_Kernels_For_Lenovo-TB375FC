@@ -56,11 +56,10 @@ jobs:
 
       - name: 拉取Android编译工具链
         run: |
-            # 拉取Android官方Clang工具链（适配Android 15）
             mkdir -p ${{ github.workspace }}/toolchain
-            curl -LO https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/master/clang-r498229b.tar.gz
-            tar -xzf clang-r498229b.tar.gz -C ${{ github.workspace }}/toolchain
-            # 配置工具链环境变量
+            curl -LO https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+/refs/tags/android-15.0.0_r1/clang-r522817.tar.gz?format=download
+            mv clang-r522817.tar.gz?format=download clang-r522817.tar.gz
+            tar -xzf clang-r522817.tar.gz -C ${{ github.workspace }}/toolchain
             echo "PATH=${{ github.workspace }}/toolchain/bin:$PATH" >> $GITHUB_ENV
             echo "CROSS_COMPILE=aarch64-linux-android-" >> $GITHUB_ENV
             echo "CC=clang" >> $GITHUB_ENV
