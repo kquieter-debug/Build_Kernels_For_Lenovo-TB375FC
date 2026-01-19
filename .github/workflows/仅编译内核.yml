@@ -11,23 +11,44 @@ env:
   KERNEL_BRANCH: "oneplus/mt6897_v_15.0.0_oneplus_pad"
   DIST_DIR: "${{ github.workspace }}/out/dist"  # 编译输出目录
   RUST_VERSION: "1.70.0"      # Rust 版本声明
+  BAZEL_VERSION: "6.4.0"      # 适配Android内核编译的Bazel版本
+  LLVM_VERSION: "llvmorg-17.0.1"  # 适配Android 15的LLVM版本（对应Clang 17）
+  LLVM_SRC_DIR: "${{ github.workspace }}/llvm-project"
+  LLVM_BUILD_DIR: "${{ github.workspace }}/llvm-build"
+  LLVM_INSTALL_DIR: "${{ github.workspace }}/llvm-install"
 
 jobs:
   build_kernel:
-    runs-on: ubuntu-22.04
-    timeout-minutes: 120       # 设置超时时间
+    runs-on: ubuntu-latest
+    timeout-minutes: 180       # 源码编译Clang耗时更长，延长超时时间
     steps:
-      - name: 安装依赖
+      - name: 安装基础依赖（含Clang编译依赖）
         run: |
           sudo apt update && sudo apt upgrade -y
           sudo apt install -y \
             git python3 python3-pip openjdk-17-jdk flex bison bc \
             libssl-dev libelf-dev repo curl wget zip unzip \
             ninja-build pkg-config libc6-dev-i386 \
-            clang llvm lld make gcc-aarch64-linux-gnu \
-            gcc-aarch64-linux-gnu
+            make gcc-aarch64-linux-gnu \
+            apt-transport-https ca-certificates gnupg \
+            # 新增编译LLVM/Clang的依赖
+            cmake cmake-data libncurses5-dev libxml2-dev \
+            zlib1g-dev libedit-dev libffi-dev swig liblzma-dev
           # 清理缓存，避免依赖冲突
           sudo apt autoremove -y && sudo apt clean
+
+      - name: 安装Bazel（谷歌官方编译工具）
+        run: |
+          # 添加Bazel官方源
+          curl -fsSL https://bazel.build/bazel-release.pub.gpg | gpg --dearmor > bazel-archive-keyring.gpg
+          sudo mv bazel-archive-keyring.gpg /usr/share/keyrings
+          echo "deb [arch=amd64 signed-by=/usr/share/keyrings/bazel-archive-keyring.gpg] https://storage.googleapis.com/bazel-apt stable jdk11" | sudo tee /etc/apt/sources.list.d/bazel.list
+          # 安装指定版本Bazel
+          sudo apt update && sudo apt install -y bazel-${{ env.BAZEL_VERSION }}
+          # 创建软链接，方便调用
+          sudo ln -s /usr/bin/bazel-${{ env.BAZEL_VERSION }} /usr/bin/bazel
+          # 验证安装
+          bazel --version
 
       - name: 安装 Rust 编译链（适配 Android GKI）
         uses: dtolnay/rust-toolchain@master
@@ -40,7 +61,6 @@ jobs:
         run: |
             echo "RUSTC=$(which rustc)" >> $GITHUB_ENV
             echo "CARGO=$(which cargo)" >> $GITHUB_ENV
-            # 修正：RUST_TARGET_PATH 应为目录（原指向lib.rs文件）
             echo "RUST_TARGET_PATH=$(rustc --print sysroot)/lib/rustlib/src/rust/library/std/src" >> $GITHUB_ENV
             # 验证 Rust 安装
             rustc --version
@@ -53,30 +73,59 @@ jobs:
             cd ${{ github.workspace }}/kernel
             # 检查分支是否正确
             git branch -v
+            # 确认tools/bazel文件存在（谷歌内核源码标配）
+            ls -lh tools/bazel || echo "警告：未找到bazel编译脚本，需确认内核源码适配Bazel编译"
 
-      - name: 拉取Android编译工具链
+      - name: 从清华镜像克隆llvm-project源码（替代预编译Clang）
         run: |
-            mkdir -p ${{ github.workspace }}/toolchain
-            curl -LO https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+/refs/tags/android-15.0.0_r1/clang-r522817.tar.gz?format=download
-            mv clang-r522817.tar.gz?format=download clang-r522817.tar.gz
-            tar -xzf clang-r522817.tar.gz -C ${{ github.workspace }}/toolchain
-            echo "PATH=${{ github.workspace }}/toolchain/bin:$PATH" >> $GITHUB_ENV
+            # 克隆清华镜像的llvm-project，指定适配Android 15的版本分支
+            git clone --depth=1 --branch=${{ env.LLVM_VERSION }} \
+              https://mirrors.tuna.tsinghua.edu.cn/git/llvm-project.git ${{ env.LLVM_SRC_DIR }}
+            # 验证克隆结果
+            ls -lh ${{ env.LLVM_SRC_DIR }}/clang ${{ env.LLVM_SRC_DIR }}/llvm
+
+      - name: 编译llvm-project生成Clang工具链
+        run: |
+            # 创建编译目录
+            mkdir -p ${{ env.LLVM_BUILD_DIR }}
+            cd ${{ env.LLVM_BUILD_DIR }}
+            # 配置cmake（仅编译Clang/LLVM，适配aarch64安卓交叉编译）
+            cmake -G Ninja \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_INSTALL_PREFIX=${{ env.LLVM_INSTALL_DIR }} \
+              -DLLVM_TARGETS_TO_BUILD=AArch64;X86 \
+              -DLLVM_ENABLE_PROJECTS=clang;lld \
+              -DLLVM_ENABLE_RUNTIMES=compiler-rt \
+              ${{ env.LLVM_SRC_DIR }}/llvm
+            # 编译（使用全部CPU核心加速）
+            ninja -j$(nproc)
+            # 安装到指定目录
+            ninja install
+            # 验证编译结果
+            ${{ env.LLVM_INSTALL_DIR }}/bin/clang --version
+            ${{ env.LLVM_INSTALL_DIR }}/bin/lld --version
+
+      - name: 配置Clang工具链环境变量
+        run: |
+            # 将编译后的Clang加入PATH
+            echo "PATH=${{ env.LLVM_INSTALL_DIR }}/bin:$PATH" >> $GITHUB_ENV
+            # 配置内核编译的交叉编译环境
             echo "CROSS_COMPILE=aarch64-linux-android-" >> $GITHUB_ENV
             echo "CC=clang" >> $GITHUB_ENV
+            echo "LD=lld" >> $GITHUB_ENV
+            # 验证环境变量
+            clang --version
+            lld --version
 
-      - name: 🔨 编译内核（传统build.sh方式）
+      - name: 编译内核（谷歌Bazel方式）
         run: |
             cd ${{ github.workspace }}/kernel
-            # 指定设备defconfig（一加Pad mt6897对应的defconfig）
-            export DEFCONFIG=defconfig
-            # 执行内核自带的build.sh编译
-            ./build.sh $DEFCONFIG
-            # 编译完成后，产物输出到out/arch/arm64/boot/
+            # 创建输出目录
             mkdir -p ${{ env.DIST_DIR }}
-            cp out/arch/arm64/boot/Image.lz4-dtb ${{ env.DIST_DIR }}
-            cp out/arch/arm64/boot/dtbo.img ${{ env.DIST_DIR }}
-            cp -r out/modules ${{ env.DIST_DIR }}
-            # 验证编译产物（修正缩进）
+            # 谷歌官方Bazel编译命令（指定输出目录）
+            tools/bazel run //common:kernel_aarch64_dist -- --destdir=${{ env.DIST_DIR }}
+            # 验证编译产物
+            echo "编译产物列表："
             ls -lh ${{ env.DIST_DIR }}
 
       - name: 上传编译产物
