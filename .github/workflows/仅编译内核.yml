@@ -51,7 +51,7 @@ jobs:
         run: |
           cd "kernel-source repo sync/kernel"
           # 加载环境变量
-          source envsetup.sh
+          #source envsetup.sh
           # 执行编译脚本（根据你的仓库结构选择）
           #./build.sh
           # 或者如果是用 bazel 构建
