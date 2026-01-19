@@ -7,18 +7,16 @@ jobs:
   build:
     runs-on: ubuntu-22.04
     steps:
-      # 配置依赖
+      # 配置依赖（仅保留内核编译必要项）
       - name: Install Dependencies
         run: |
+          set -e  # 错误立即退出
           sudo apt update
           sudo apt install -y \
             bc bison build-essential ccache curl flex \
-            g++-multilib gcc-multilib git gnupg gperf \
-            imagemagick lib32ncurses5-dev lib32readline-dev lib32z1-dev \
-            liblz4-tool libncurses5 libncurses5-dev libsdl1.2-dev libssl-dev \
-            libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools \
-            xsltproc zip zlib1g-dev \
-            openjdk-17-jdk \
+            gcc-multilib git gnupg gperf \
+            lib32ncurses5-dev lib32readline-dev lib32z1-dev \
+            liblz4-tool libncurses5-dev libssl-dev \
             python3 python3-pip \
             npm
           sudo npm install -g @bazel/bazelisk
@@ -31,37 +29,32 @@ jobs:
           ref: oneplus/mt6897_v_15.0.0_oneplus_pad
           path: kernel-source
 
-      # 拉取当前仓库的编译脚本/配置
-      - name: Checkout Build Configs
-        uses: actions/checkout@v4
-        with:
-          path: build-configs
-          
-      - name: 打印完整目录结构（验证实际路径）
+      # 打印目录结构（增加层级，验证路径）
+      - name: Print Directory Structure
         run: |
-            # 打印当前工作目录
-            pwd
-            # 打印根目录所有文件/目录（显示层级）
-            ls -la
-            # 递归打印目录结构（更清晰）
-            find . -maxdepth 3 -type d  # 只显示3层目录，避免输出过多
+          set -e
+          pwd
+          ls -la kernel-source/  # 直接查看内核源码根目录
+          find kernel-source -maxdepth 5 -type d  # 增加层级，确认关键目录
 
-      # 进入内核目录并执行编译
+      # 进入内核目录并执行编译（先确认Bazel配置路径）
       - name: Build Kernel
         run: |
-          cd kernel-source/kernel/build
-          # 加载环境变量
-          #source envsetup.sh
-          # 执行编译脚本（根据你的仓库结构选择）
-          #./build.sh
-          # 或者如果是用 bazel 构建
-          bazelisk build //kernel:kernel_aarch64
+          set -e
+          # 优先确认Bazel配置在kernel-source根目录（根据实际仓库调整）
+          cd kernel-source
+          # Bazel构建增加详细日志，失败时便于排查
+          bazelisk build //kernel:kernel_aarch64 --verbose_failures --show_progress_rate_limit=30
 
-      # 上传编译产物
+      # 上传编译产物（匹配Bazel实际输出路径）
       - name: Upload Kernel Image
         uses: actions/upload-artifact@v4
         with:
           name: kernel-image
           path: |
-            kernel-source/kernel/out/**/*.img
-            kernel-source/kernel/out/**/*.dtb
+            # Bazel默认输出路径（根据实际构建产物调整）
+            kernel-source/bazel-out/**/*.img
+            kernel-source/bazel-out/**/*.dtb
+            # 兼容可能的out目录（若有自定义输出）
+            kernel-source/out/**/*.img
+            kernel-source/out/**/*.dtb
