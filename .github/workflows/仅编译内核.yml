@@ -51,28 +51,13 @@ jobs:
         id: install_bazel
         continue-on-error: false  # 版本安装失败直接终止，避免后续无效编译
         run: |
-          # 1. 添加Bazel官方源（适配LTS版本验证）
-          sudo apt install -y apt-transport-https curl gnupg
-          curl -fsSL https://bazel.build/bazel-release.pub.gpg | gpg --dearmor > bazel.gpg
-          sudo mv bazel.gpg /etc/apt/trusted.gpg.d/
-          # 明确指定stable轨道（LTS版本所在轨道），避免拉取滚动版本
-          echo "deb [arch=amd64] https://storage.googleapis.com/bazel-apt stable jdk11" | sudo tee /etc/apt/sources.list.d/bazel.list
-          
-          # 2. 更新源并安装指定LTS版本
-          sudo apt update -y
-          # 强制指定版本安装，避免自动升级到非预期版本
-          sudo apt install -y --no-install-recommends bazel-${{ env.BAZEL_VERSION }}
-          
-          # 3. 创建软链接，确保全局可用
-          sudo ln -sf /usr/bin/bazel-${{ env.BAZEL_VERSION }} /usr/bin/bazel
-          
-          # 4. 严格验证版本（符合语义化版本规则）
-          INSTALLED_VERSION=$(bazel --version | awk '{print $2}')
-          if [ "$INSTALLED_VERSION" != "${{ env.BAZEL_VERSION }}" ]; then
-            echo "错误：安装的Bazel版本为$INSTALLED_VERSION，预期为${{ env.BAZEL_VERSION }}"
-            exit 1
-          fi
-          echo "✅ Bazel ${{ env.BAZEL_VERSION }}（${{ env.BAZEL_LTS_TRACK }} LTS）安装验证成功"
+          # 下载对应版本的官方安装脚本
+          curl -fLO https://github.com/bazelbuild/bazel/releases/download/${BAZEL_VERSION}/bazel-${BAZEL_VERSION}-installer-linux-x86_64.sh
+          # 赋予执行权限
+          chmod +x bazel-${BAZEL_VERSION}-installer-linux-x86_64.sh
+          # 安装到系统路径（适配GitHub Actions环境）
+          sudo ./bazel-${BAZEL_VERSION}-installer-linux-x86_64.sh --prefix=/usr/local
+          # 验证安装版本
           bazel --version
 
       # 步骤4：Bazel构建规则兼容性检查（适配Android内核编译）
