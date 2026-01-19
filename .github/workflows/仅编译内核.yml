@@ -55,7 +55,7 @@ jobs:
           # 执行编译脚本（根据你的仓库结构选择）
           #./build.sh
           # 或者如果是用 bazel 构建
-          bazel build //kernel:kernel_aarch64
+          #bazel build //kernel:kernel_aarch64
 
       # 上传编译产物
       - name: Upload Kernel Image
