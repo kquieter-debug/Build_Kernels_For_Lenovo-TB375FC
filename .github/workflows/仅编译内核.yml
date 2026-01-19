@@ -52,7 +52,7 @@ jobs:
             cd ${{ github.workspace }}/kernel
             # 检查分支是否正确
             git branch -v
-
+            
       - name: 拉取Android编译工具链
         run: |
             # 拉取Android官方Clang工具链（适配Android 15）
