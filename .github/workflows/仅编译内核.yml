@@ -10,7 +10,7 @@ jobs:
       # 配置依赖（仅保留内核编译必要项）
       - name: Install Dependencies
         run: |
-          set -e  # 错误立即退出
+          set -e  # 命令失败立即退出
           sudo apt update
           sudo apt install -y \
             bc bison build-essential ccache curl flex \
@@ -19,7 +19,20 @@ jobs:
             liblz4-tool libncurses5-dev libssl-dev \
             python3 python3-pip \
             npm
+          # 1. 指定bazelisk版本安装
           sudo npm install -g @bazel/bazelisk
+          # 2. 创建缺失的目录层级（关键：路径要和脚本期望的完全一致）
+          mkdir -p kernel-source/kernel/prebuilts/build-tools/path/linux-x86/
+          # 3. 软链接系统Python3到目标路径（让python3路径直接指向可执行文件）
+          # 先确认系统Python3的路径（通常是/usr/bin/python3）
+          WHICH_PYTHON=$(which python3)
+          echo "系统Python3路径：$WHICH_PYTHON"  # 日志中验证路径
+          # 创建软链接：目标路径 = kernel-source/kernel/prebuilts/build-tools/path/linux-x86/python3
+          ln -s $WHICH_PYTHON kernel-source/kernel/prebuilts/build-tools/path/linux-x86/python3
+          # 4. 验证目标路径是否为可执行文件（可选，用于日志排查）
+          ls -la kernel-source/kernel/prebuilts/build-tools/path/linux-x86/python3
+          # 测试执行，确认能调用
+          kernel-source/kernel/prebuilts/build-tools/path/linux-x86/python3 --version
 
       # 拉取内核源码仓库
       - name: Checkout Kernel Source
@@ -36,17 +49,6 @@ jobs:
           pwd
           ls -la kernel-source/  # 直接查看内核源码根目录
           find kernel-source -maxdepth 5 -type d  # 增加层级，确认关键目录
-          
-      - name: 安装预编译Python3到指定路径
-        run: |
-          set -e
-          # 创建缺失的目录
-          mkdir -p kernel-source/kernel/prebuilts/build-tools/path/linux-x86/
-          # 下载Python3并解压到目标路径（示例为Python3.9，需匹配脚本要求的版本）
-          curl -o python3.tar.xz https://www.python.org/ftp/python/3.9.18/Python-3.9.18.tgz
-          tar -xf python3.tar.xz -C kernel-source/kernel/prebuilts/build-tools/path/linux-x86/
-          # 重命名为脚本期望的“python3”
-          mv kernel-source/kernel/prebuilts/build-tools/path/linux-x86/Python-3.9.18 kernel-source/kernel/prebuilts/build-tools/path/linux-x86/python3
 
       # 进入内核目录并执行编译（先确认Bazel配置路径）
       - name: Build Kernel
