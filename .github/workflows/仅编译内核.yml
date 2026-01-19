@@ -40,7 +40,8 @@ jobs:
         run: |
             echo "RUSTC=$(which rustc)" >> $GITHUB_ENV
             echo "CARGO=$(which cargo)" >> $GITHUB_ENV
-            echo "RUST_TARGET_PATH=$(rustc --print sysroot)/lib/rustlib/src/rust/library/std/src/lib.rs" >> $GITHUB_ENV
+            # 修正：RUST_TARGET_PATH 应为目录（原指向lib.rs文件）
+            echo "RUST_TARGET_PATH=$(rustc --print sysroot)/lib/rustlib/src/rust/library/std/src" >> $GITHUB_ENV
             # 验证 Rust 安装
             rustc --version
             cargo --version
@@ -64,7 +65,7 @@ jobs:
             echo "CROSS_COMPILE=aarch64-linux-android-" >> $GITHUB_ENV
             echo "CC=clang" >> $GITHUB_ENV
 
-        - name: 🔨 编译内核（传统build.sh方式）
+      - name: 🔨 编译内核（传统build.sh方式）
         run: |
             cd ${{ github.workspace }}/kernel
             # 指定设备defconfig（一加Pad mt6897对应的defconfig）
@@ -76,8 +77,8 @@ jobs:
             cp out/arch/arm64/boot/Image.lz4-dtb ${{ env.DIST_DIR }}
             cp out/arch/arm64/boot/dtbo.img ${{ env.DIST_DIR }}
             cp -r out/modules ${{ env.DIST_DIR }}
-          # 验证编译产物
-          ls -lh ${{ env.DIST_DIR }}
+            # 验证编译产物（修正缩进）
+            ls -lh ${{ env.DIST_DIR }}
 
       - name: 上传编译产物
         uses: actions/upload-artifact@v4
