@@ -10,7 +10,11 @@ jobs:
       # 配置依赖
       - name: Install Dependencies
         run: |
+          sudo apt install apt-transport-https curl gnupg -y
           sudo apt update
+          curl -fsSL https://bazel.build/bazel-release.pub.gpg | gpg --dearmor >bazel-archive-keyring.gpg
+          sudo mv bazel-archive-keyring.gpg /usr/share/keyrings
+          sudo tee /etc/apt/sources.list.d/bazel.list
           sudo apt install -y \
             bc bison build-essential ccache curl flex \
             g++-multilib gcc-multilib git gnupg gperf \
