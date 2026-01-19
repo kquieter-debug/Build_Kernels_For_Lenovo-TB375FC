@@ -42,7 +42,7 @@ jobs:
         run: |
           set -e
           # 优先确认Bazel配置在kernel-source根目录（根据实际仓库调整）
-          cd kernel-source
+          cd kernel-source/kernel
           # Bazel构建增加详细日志，失败时便于排查
           bazelisk build //kernel:kernel_aarch64 --verbose_failures --show_progress_rate_limit=30
 
