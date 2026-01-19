@@ -20,7 +20,8 @@ jobs:
             git python3 python3-pip openjdk-17-jdk flex bison bc \
             libssl-dev libelf-dev repo curl wget zip unzip \
             ninja-build pkg-config libc6-dev-i386 \
-            clang llvm lld make gcc-aarch64-linux-gnu
+            clang llvm lld make gcc-aarch64-linux-gnu \
+            aarch64-linux-gnu-gcc
           # 清理缓存，避免依赖冲突
           sudo apt autoremove -y && sudo apt clean
 
@@ -48,26 +49,29 @@ jobs:
           # 检查分支是否正确
           git branch -v
 
-      - name: 安装 Bazelisk（适配内核的 Bazel 版本）
+      - name: 拉取Android编译工具链
         run: |
-          curl -LO https://github.com/bazelbuild/bazelisk/releases/latest/download/bazelisk-linux-amd64
-          chmod +x bazelisk-linux-amd64
-          sudo mv bazelisk-linux-amd64 /usr/local/bin/bazel
-          # 验证 Bazel
-          bazel --version
+            # 拉取Android官方Clang工具链（适配Android 15）
+            mkdir -p ${{ github.workspace }}/toolchain
+            curl -LO https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/master/clang-r498229b.tar.gz
+            tar -xzf clang-r498229b.tar.gz -C ${{ github.workspace }}/toolchain
+            # 配置工具链环境变量
+            echo "PATH=${{ github.workspace }}/toolchain/bin:$PATH" >> $GITHUB_ENV
+            echo "CROSS_COMPILE=aarch64-linux-android-" >> $GITHUB_ENV
+            echo "CC=clang" >> $GITHUB_ENV
 
-      - name: 编译内核（启用 Rust 支持）
+        - name: 🔨 编译内核（传统build.sh方式）
         run: |
-          cd ${{ github.workspace }}/kernel
-          # 创建输出目录
-          mkdir -p ${{ env.DIST_DIR }}
-          # 编译命令：启用 Rust，指定 aarch64 架构，输出到指定目录
-          tools/bazel run //common:kernel_aarch64_dist \
-            --define=rustc_path=${{ env.RUSTC }} \
-            --define=cargo_path=${{ env.CARGO }} \
-            --define=enable_rust=1 \
-            --lto=thin \
-            -- --destdir=${{ env.DIST_DIR }}
+            cd ${{ github.workspace }}/kernel
+            # 指定设备defconfig（一加Pad mt6897对应的defconfig）
+            export DEFCONFIG=defconfig
+            # 执行内核自带的build.sh编译
+            ./build.sh $DEFCONFIG
+            # 编译完成后，产物输出到out/arch/arm64/boot/
+            mkdir -p ${{ env.DIST_DIR }}
+            cp out/arch/arm64/boot/Image.lz4-dtb ${{ env.DIST_DIR }}
+            cp out/arch/arm64/boot/dtbo.img ${{ env.DIST_DIR }}
+            cp -r out/modules ${{ env.DIST_DIR }}
           # 验证编译产物
           ls -lh ${{ env.DIST_DIR }}
 
