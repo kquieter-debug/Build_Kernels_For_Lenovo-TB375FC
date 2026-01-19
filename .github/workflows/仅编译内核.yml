@@ -25,6 +25,7 @@ jobs:
       - name: 安装基础依赖（含Clang编译依赖）
         run: |
           sudo apt update && sudo apt upgrade -y
+          #mkdir -p "/home/runner/work/Build_kernel-oplus_For_Lenovo-TB375FC/Build_kernel-oplus_For_Lenovo-TB375FC/cmake-data"
           sudo apt install -y \
             git python3 python3-pip openjdk-17-jdk flex bison bc \
             libssl-dev libelf-dev repo curl wget zip unzip \
@@ -90,7 +91,6 @@ jobs:
         run: |
             # 创建编译目录
             mkdir -p ${{ env.LLVM_BUILD_DIR }}
-            #mkdir -p "/home/runner/work/Build_kernel-oplus_For_Lenovo-TB375FC/Build_kernel-oplus_For_Lenovo-TB375FC/cmake-data"
             cd ${{ env.LLVM_BUILD_DIR }}
             # 配置cmake（仅编译Clang/LLVM，适配aarch64安卓交叉编译）
             cmake -G Ninja \
