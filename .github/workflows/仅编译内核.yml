@@ -1,141 +1,176 @@
-###################
-#Written by Muffin#
-#I wrote this sh*t#
-###################
+# 工作流名称
 name: 仅编译内核
+
+# 触发方式：仅手动触发
 on:
-  workflow_dispatch:    #手动触发编译
+  workflow_dispatch:
 
-env:
-  KERNEL_REPO: "https://github.com/kquieter-debug/android_kernel_oneplus_mt6897.git"      # 内核仓库位置
-  KERNEL_BRANCH: "oneplus/mt6897_v_15.0.0_oneplus_pad"
-  DIST_DIR: "${{ github.workspace }}/out/dist"  # 编译输出目录
-  RUST_VERSION: "1.70.0"      # Rust 版本声明
-  BAZEL_VERSION: "6.4.0"      # 适配Android内核编译的Bazel版本
-  LLVM_VERSION: "llvmorg-17.0.1"  # 适配Android 15的LLVM版本（对应Clang 17）
-  LLVM_SRC_DIR: "${{ github.workspace }}/llvm-project"
-  LLVM_BUILD_DIR: "${{ github.workspace }}/llvm-build"
-  LLVM_INSTALL_DIR: "${{ github.workspace }}/llvm-install"
-
+# 定义任务
 jobs:
   build_kernel:
+    # 运行环境
     runs-on: ubuntu-latest
-    timeout-minutes: 180       # 源码编译Clang耗时更长，延长超时时间
+    # 任务超时时间：180分钟
+    timeout-minutes: 180
+    
+    # 环境变量定义（全局）
+    env:
+      KERNEL_REPO: https://github.com/kquieter-debug/android_kernel_oneplus_mt6897.git
+      KERNEL_BRANCH: oneplus/mt6897_v_15.0.0_oneplus_pad
+      DIST_DIR: ${{ github.workspace }}/out/dist
+      RUST_VERSION: 1.70.0
+      BAZEL_VERSION: 6.4.0
+      LLVM_VERSION: llvmorg-20.1.0
+      LLVM_SRC_DIR: ${{ github.workspace }}/llvm-project
+      LLVM_INSTALL_DIR: ${{ github.workspace }}/llvm-install
+    
+    # 任务步骤
     steps:
-      - name: 安装基础依赖（含Clang编译依赖）
-        run: |
-          sudo apt update && sudo apt upgrade -y
-          #mkdir -p "/home/runner/work/Build_kernel-oplus_For_Lenovo-TB375FC/Build_kernel-oplus_For_Lenovo-TB375FC/cmake-data"
-          sudo apt install -y \
-            git python3 python3-pip openjdk-17-jdk flex bison bc \
-            libssl-dev libelf-dev repo curl wget zip unzip \
-            ninja-build pkg-config libc6-dev-i386 \
-            make gcc-aarch64-linux-gnu \
-            apt-transport-https ca-certificates gnupg \
-            # 新增编译LLVM/Clang的依赖
-            cmake cmake-data libncurses5-dev libxml2-dev \
-            zlib1g-dev libedit-dev libffi-dev swig liblzma-dev \
-            liblzma-dev
-          # 清理缓存，避免依赖冲突
-          sudo apt autoremove -y && sudo apt clean
+      # 步骤1：检出当前仓库代码（基础步骤）
+      - name: 检出代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
 
-      - name: 安装Bazel（谷歌官方编译工具）
+      # 步骤2：安装基础依赖
+      - name: 安装基础编译依赖
+        run: |
+          # 更新系统源并安装基础工具
+          sudo apt update -y
+          sudo apt install -y git python3 python3-pip flex bison cmake ninja-build \
+                              libssl-dev liblzma-dev libncurses5-dev libxml2-dev \
+                              pkg-config zip unzip zlib1g-dev wget curl
+          # 清理缓存，避免依赖冲突
+          sudo apt autoremove -y
+          sudo apt clean
+
+      # 步骤3：安装Bazel 6.4.0
+      - name: 安装指定版本Bazel
         run: |
           # 添加Bazel官方源
-          curl -fsSL https://bazel.build/bazel-release.pub.gpg | gpg --dearmor > bazel-archive-keyring.gpg
-          sudo mv bazel-archive-keyring.gpg /usr/share/keyrings
-          echo "deb [arch=amd64 signed-by=/usr/share/keyrings/bazel-archive-keyring.gpg] https://storage.googleapis.com/bazel-apt stable jdk11" | sudo tee /etc/apt/sources.list.d/bazel.list
-          # 安装指定版本Bazel
-          sudo apt update && sudo apt install -y bazel-${{ env.BAZEL_VERSION }}
-          # 创建软链接，方便调用
-          sudo ln -s /usr/bin/bazel-${{ env.BAZEL_VERSION }} /usr/bin/bazel
+          sudo apt install -y apt-transport-https curl gnupg
+          curl -fsSL https://bazel.build/bazel-release.pub.gpg | gpg --dearmor > bazel.gpg
+          sudo mv bazel.gpg /etc/apt/trusted.gpg.d/
+          echo "deb [arch=amd64] https://storage.googleapis.com/bazel-apt stable jdk11" | sudo tee /etc/apt/sources.list.d/bazel.list
+          # 更新源并安装指定版本
+          sudo apt update -y
+          sudo apt install -y bazel-${{ env.BAZEL_VERSION }}
+          # 创建软链接，确保bazel命令可用
+          sudo ln -sf /usr/bin/bazel-${{ env.BAZEL_VERSION }} /usr/bin/bazel
           # 验证安装
           bazel --version
 
-      - name: 安装 Rust 编译链（适配 Android GKI）
+      # 步骤4：安装Rust 1.70.0编译链
+      - name: 安装Rust工具链
         uses: dtolnay/rust-toolchain@master
         with:
-            toolchain: ${{ env.RUST_VERSION }}
-            targets: aarch64-linux-android
-            components: rust-src, rustfmt, clippy
-          
-      - name: 配置 Rust 环境
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: aarch64-linux-android
+          components: rust-src, rustfmt, clippy
+      # 配置Rust环境变量
+      - name: 配置Rust环境
         run: |
-            echo "RUSTC=$(which rustc)" >> $GITHUB_ENV
-            echo "CARGO=$(which cargo)" >> $GITHUB_ENV
-            echo "RUST_TARGET_PATH=$(rustc --print sysroot)/lib/rustlib/src/rust/library/std/src" >> $GITHUB_ENV
-            # 验证 Rust 安装
-            rustc --version
-            cargo --version
+          echo "RUSTUP_HOME=$HOME/.cargo" >> $GITHUB_ENV
+          echo "CARGO_HOME=$HOME/.cargo" >> $GITHUB_ENV
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+          # 验证Rust版本
+          rustc --version
+          cargo --version
 
-      - name: 拉取内核源码
+      # 步骤5：拉取内核源码
+      - name: 克隆内核源码
         run: |
-            mkdir -p ${{ github.workspace }}/kernel
-            git clone --depth=1 --branch=${{ env.KERNEL_BRANCH }} ${{ env.KERNEL_REPO }} ${{ github.workspace }}/kernel
-            cd ${{ github.workspace }}/kernel
-            # 检查分支是否正确
-            git branch -v
-            # 确认tools/bazel文件存在（谷歌内核源码标配）
-            ls -lh tools/bazel || echo "警告：未找到bazel编译脚本，需确认内核源码适配Bazel编译"
-            mkdir -p "/home/runner/work/Build_kernel-oplus_For_Lenovo-TB375FC/Build_kernel-oplus_For_Lenovo-TB375FC/cmake-data"
+          # 创建内核源码目录并克隆
+          mkdir -p ${{ github.workspace }}/kernel
+          cd ${{ github.workspace }}/kernel
+          git clone -b ${{ env.KERNEL_BRANCH }} ${{ env.KERNEL_REPO }} .
+          # 检查分支和关键文件
+          git branch
+          if [ -f "tools/bazel" ]; then
+            echo "内核源码tools/bazel文件存在"
+          else
+            echo "警告：内核源码tools/bazel文件缺失"
+            exit 1
+          fi
 
-      - name: 从清华镜像克隆llvm-project源码（替代预编译Clang）
+      # 步骤6：下载并解压LLVM 20.1.0源码
+      - name: 下载解压LLVM 20.1.0源码
         run: |
-            # 克隆清华镜像的llvm-project，指定适配Android 15的版本分支
-            git clone --depth=1 --branch=${{ env.LLVM_VERSION }} \
-              https://mirrors.tuna.tsinghua.edu.cn/git/llvm-project.git ${{ env.LLVM_SRC_DIR }}
-            # 验证克隆结果
-            ls -lh ${{ env.LLVM_SRC_DIR }}/clang ${{ env.LLVM_SRC_DIR }}/llvm
+          # 创建LLVM工作目录
+          mkdir -p ${{ env.LLVM_SRC_DIR }}
+          cd ${{ env.LLVM_SRC_DIR }}
+          # 下载官方源码包
+          curl -LO https://github.com/llvm/llvm-project/releases/download/${{ env.LLVM_VERSION }}/llvm-project-20.1.0.src.tar.xz
+          # 解压（先解xz，再解tar）
+          unxz llvm-project-20.1.0.src.tar.xz
+          tar -xf llvm-project-20.1.0.src.tar
+          # 验证解压结果
+          if [ -d "llvm-project-20.1.0.src/llvm" ]; then
+            echo "LLVM源码解压成功"
+          else
+            echo "LLVM源码解压失败"
+            exit 1
+          fi
 
-      - name: 编译llvm-project生成Clang工具链
+      # 步骤7：编译并安装LLVM/Clang 20.1.0
+      - name: 编译安装LLVM/Clang
         run: |
-            # 创建编译目录
-            mkdir -p ${{ env.LLVM_BUILD_DIR }}
-            cd ${{ env.LLVM_BUILD_DIR }}
-            # 配置cmake（仅编译Clang/LLVM，适配aarch64安卓交叉编译）
-            cmake -G Ninja \
-              -DCMAKE_BUILD_TYPE=Release \
-              -DCMAKE_INSTALL_PREFIX=${{ env.LLVM_INSTALL_DIR }} \
-              -DLLVM_TARGETS_TO_BUILD=AArch64;X86 \
-              -DLLVM_ENABLE_PROJECTS=clang;lld \
-              -DLLVM_ENABLE_RUNTIMES=compiler-rt \
-              ${{ env.LLVM_SRC_DIR }}/llvm
-            # 编译（使用全部CPU核心加速）
-            ninja -j$(nproc)
-            # 安装到指定目录
-            ninja install
-            # 验证编译结果
-            ${{ env.LLVM_INSTALL_DIR }}/bin/clang --version
-            ${{ env.LLVM_INSTALL_DIR }}/bin/lld --version
+          # 进入LLVM源码目录
+          cd ${{ env.LLVM_SRC_DIR }}/llvm-project-20.1.0.src
+          # 创建编译目录
+          mkdir build && cd build
+          # CMake配置（适配Android内核编译）
+          cmake ../llvm -DCMAKE_BUILD_TYPE=Release \
+                        -DLLVM_ENABLE_PROJECTS='clang' \
+                        -DLLVM_ENABLE_RUNTIMES='compiler-rt;libcxx;libcxxabi;libunwind' \
+                        -DLLVM_TARGETS_TO_BUILD='AArch64;X86' \
+                        -DCMAKE_INSTALL_PREFIX=${{ env.LLVM_INSTALL_DIR }} \
+                        -G Ninja
+          # 编译（使用全部CPU核心加速）
+          ninja -j$(nproc)
+          # 安装到指定目录
+          ninja install
+          # 验证编译结果
+          ${{ env.LLVM_INSTALL_DIR }}/bin/clang --version
+          ${{ env.LLVM_INSTALL_DIR }}/bin/lld --version
 
-      - name: 配置Clang工具链环境变量
+      # 步骤8：配置Clang交叉编译环境
+      - name: 配置Clang环境变量
         run: |
-            # 将编译后的Clang加入PATH
-            echo "PATH=${{ env.LLVM_INSTALL_DIR }}/bin:$PATH" >> $GITHUB_ENV
-            # 配置内核编译的交叉编译环境
-            echo "CROSS_COMPILE=aarch64-linux-android-" >> $GITHUB_ENV
-            echo "CC=clang" >> $GITHUB_ENV
-            echo "LD=lld" >> $GITHUB_ENV
-            # 验证环境变量
-            clang --version
-            lld --version
+          # 将编译后的Clang加入PATH
+          echo "${{ env.LLVM_INSTALL_DIR }}/bin" >> $GITHUB_PATH
+          # 配置交叉编译环境变量（适配AArch64 Android内核）
+          echo "CROSS_COMPILE=aarch64-linux-gnu-" >> $GITHUB_ENV
+          echo "CC=clang" >> $GITHUB_ENV
+          echo "LD=lld" >> $GITHUB_ENV
+          # 验证环境
+          clang --version
+          lld --version
 
-      - name: 编译内核（谷歌Bazel方式）
+      # 步骤9：编译Android内核（Bazel方式）
+      - name: 编译内核
         run: |
-            cd ${{ github.workspace }}/kernel
-            # 创建输出目录
-            mkdir -p ${{ env.DIST_DIR }}
-            # 谷歌官方Bazel编译命令（指定输出目录）
-            tools/bazel run //common:kernel_aarch64_dist -- --destdir=${{ env.DIST_DIR }}
-            # 验证编译产物
-            echo "编译产物列表："
-            ls -lh ${{ env.DIST_DIR }}
+          # 进入内核源码目录
+          cd ${{ github.workspace }}/kernel
+          # 创建输出目录
+          mkdir -p ${{ env.DIST_DIR }}
+          # 使用Bazel编译内核（适配Android GKI）
+          bazel build //common:kernel_aarch64 --distdir=${{ env.DIST_DIR }}
+          # 验证编译产物
+          if [ -d "${{ env.DIST_DIR }}" ] && [ "$(ls -A ${{ env.DIST_DIR }})" ]; then
+            echo "内核编译产物生成成功"
+            ls -l ${{ env.DIST_DIR }}
+          else
+            echo "内核编译产物生成失败"
+            exit 1
+          fi
 
+      # 步骤10：上传编译产物
       - name: 上传编译产物
         uses: actions/upload-artifact@v4
         with:
-          name: oneplus-pad-mt6897-kernel-${{ github.sha }}
+          name: kernel-build-output
           path: |
-            ${{ env.DIST_DIR }}/*
-            !${{ env.DIST_DIR }}/*.log  # 排除日志文件
+            ${{ env.DIST_DIR }}/**
+            !${{ env.DIST_DIR }}/**/*.log  # 排除日志文件
           retention-days: 14  # 产物保留14天
