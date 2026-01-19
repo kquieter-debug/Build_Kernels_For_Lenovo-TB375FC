@@ -20,7 +20,7 @@ jobs:
             xsltproc zip zlib1g-dev \
             openjdk-17-jdk \
             python3 python3-pip \
-            bazel
+            repo
 
       # 拉取内核源码仓库
       - name: Checkout Kernel Source
@@ -29,6 +29,7 @@ jobs:
           repository: kquieter-debug/android_kernel_modules_and_devicetree_oneplus_mt6897
           ref: oneplus/mt6897_v_15.0.0_oneplus_pad
           path: kernel-source
+            repo sync
 
       # 拉取当前仓库的编译脚本/配置
       - name: Checkout Build Configs
