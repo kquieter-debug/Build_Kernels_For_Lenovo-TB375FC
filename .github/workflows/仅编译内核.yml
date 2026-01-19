@@ -36,6 +36,15 @@ jobs:
         uses: actions/checkout@v4
         with:
           path: build-configs
+          
+      - name: 打印完整目录结构（验证实际路径）
+        run: |
+            # 打印当前工作目录
+            pwd
+            # 打印根目录所有文件/目录（显示层级）
+            ls -la
+            # 递归打印目录结构（更清晰）
+            find . -maxdepth 3 -type d  # 只显示3层目录，避免输出过多
 
       # 进入内核目录并执行编译
       - name: Build Kernel
