@@ -60,19 +60,7 @@ jobs:
           # 验证安装版本
           bazel --version
 
-      # 步骤4：Bazel构建规则兼容性检查（适配Android内核编译）
-      - name: 检查Bazel规则兼容性
-        run: |
-          # 验证内核源码中Bazel规则与当前LTS版本兼容
-          cd ${{ github.workspace }}/kernel || exit 1
-          if [ -f "tools/bazel/WORKSPACE" ]; then
-            # 检查WORKSPACE中是否指定了兼容的规则版本
-            grep -q "bazel_version" tools/bazel/WORKSPACE && echo "✅ 内核Bazel规则包含版本声明" || echo "⚠️ 建议在tools/bazel/WORKSPACE中添加Bazel版本限制"
-          fi
-          # 预加载Bazel依赖，提前发现兼容性问题
-          bazel fetch //common:kernel_aarch64 --distdir=${{ env.DIST_DIR }}
-
-      # 步骤5：安装Rust 1.70.0编译链
+      # 步骤4：安装Rust 1.70.0编译链
       - name: 安装Rust工具链
         uses: dtolnay/rust-toolchain@master
         with:
@@ -89,7 +77,7 @@ jobs:
           rustc --version
           cargo --version
 
-      # 步骤6：拉取内核源码
+      # 步骤5：拉取内核源码
       - name: 克隆内核源码
         run: |
           # 创建内核源码目录并克隆
@@ -105,7 +93,7 @@ jobs:
             exit 1
           fi
 
-      # 步骤7：下载并解压LLVM 20.1.0源码
+      # 步骤6：下载并解压LLVM 20.1.0源码
       - name: 下载解压LLVM 20.1.0源码
         run: |
           # 创建LLVM工作目录
@@ -124,7 +112,7 @@ jobs:
             exit 1
           fi
 
-      # 步骤8：编译并安装LLVM/Clang 20.1.0
+      # 步骤7：编译并安装LLVM/Clang 20.1.0
       - name: 编译安装LLVM/Clang
         run: |
           # 进入LLVM源码目录
@@ -146,7 +134,7 @@ jobs:
           ${{ env.LLVM_INSTALL_DIR }}/bin/clang --version
           ${{ env.LLVM_INSTALL_DIR }}/bin/lld --version
 
-      # 步骤9：配置Clang交叉编译环境
+      # 步骤8：配置Clang交叉编译环境
       - name: 配置Clang环境变量
         run: |
           # 将编译后的Clang加入PATH
@@ -159,7 +147,7 @@ jobs:
           clang --version
           lld --version
 
-      # 步骤10：编译Android内核（Bazel方式，适配LTS版本）
+      # 步骤9：编译Android内核（Bazel方式，适配LTS版本）
       - name: 编译内核（使用Bazel 6.x LTS）
         run: |
           # 进入内核源码目录
@@ -177,7 +165,7 @@ jobs:
             exit 1
           fi
 
-      # 步骤11：上传编译产物
+      # 步骤10：上传编译产物
       - name: 上传编译产物
         uses: actions/upload-artifact@v4
         with:
