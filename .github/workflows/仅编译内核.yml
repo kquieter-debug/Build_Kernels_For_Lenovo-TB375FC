@@ -36,6 +36,17 @@ jobs:
           pwd
           ls -la kernel-source/  # 直接查看内核源码根目录
           find kernel-source -maxdepth 5 -type d  # 增加层级，确认关键目录
+          
+      - name: 安装预编译Python3到指定路径
+        run: |
+          set -e
+          # 创建缺失的目录
+          mkdir -p kernel-source/kernel/prebuilts/build-tools/path/linux-x86/
+          # 下载Python3并解压到目标路径（示例为Python3.9，需匹配脚本要求的版本）
+          curl -o python3.tar.xz https://www.python.org/ftp/python/3.9.18/Python-3.9.18.tgz
+          tar -xf python3.tar.xz -C kernel-source/kernel/prebuilts/build-tools/path/linux-x86/
+          # 重命名为脚本期望的“python3”
+          mv kernel-source/kernel/prebuilts/build-tools/path/linux-x86/Python-3.9.18 kernel-source/kernel/prebuilts/build-tools/path/linux-x86/python3
 
       # 进入内核目录并执行编译（先确认Bazel配置路径）
       - name: Build Kernel
