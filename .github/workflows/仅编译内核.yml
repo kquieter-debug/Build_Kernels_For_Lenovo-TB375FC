@@ -32,26 +32,26 @@ jobs:
       - name: 安装 Rust 编译链（适配 Android GKI）
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: ${{ env.RUST_VERSION }}
-          targets: aarch64-linux-android
-          components: rust-src, rustfmt, clippy
+            toolchain: ${{ env.RUST_VERSION }}
+            targets: aarch64-linux-android
+            components: rust-src, rustfmt, clippy
           
       - name: 配置 Rust 环境
         run: |
-          echo "RUSTC=$(which rustc)" >> $GITHUB_ENV
-          echo "CARGO=$(which cargo)" >> $GITHUB_ENV
-          echo "RUST_TARGET_PATH=$(rustc --print sysroot)/lib/rustlib/src/rust/library/std/src/lib.rs" >> $GITHUB_ENV
-          # 验证 Rust 安装
-          rustc --version
-          cargo --version
+            echo "RUSTC=$(which rustc)" >> $GITHUB_ENV
+            echo "CARGO=$(which cargo)" >> $GITHUB_ENV
+            echo "RUST_TARGET_PATH=$(rustc --print sysroot)/lib/rustlib/src/rust/library/std/src/lib.rs" >> $GITHUB_ENV
+            # 验证 Rust 安装
+            rustc --version
+            cargo --version
 
       - name: 拉取内核源码
         run: |
-          mkdir -p ${{ github.workspace }}/kernel
-          git clone --depth=1 --branch=${{ env.KERNEL_BRANCH }} ${{ env.KERNEL_REPO }} ${{ github.workspace }}/kernel
-          cd ${{ github.workspace }}/kernel
-          # 检查分支是否正确
-          git branch -v
+            mkdir -p ${{ github.workspace }}/kernel
+            git clone --depth=1 --branch=${{ env.KERNEL_BRANCH }} ${{ env.KERNEL_REPO }} ${{ github.workspace }}/kernel
+            cd ${{ github.workspace }}/kernel
+            # 检查分支是否正确
+            git branch -v
 
       - name: 拉取Android编译工具链
         run: |
