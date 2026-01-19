@@ -33,7 +33,8 @@ jobs:
             apt-transport-https ca-certificates gnupg \
             # 新增编译LLVM/Clang的依赖
             cmake cmake-data libncurses5-dev libxml2-dev \
-            zlib1g-dev libedit-dev libffi-dev swig liblzma-dev
+            zlib1g-dev libedit-dev libffi-dev swig liblzma-dev \
+            liblzma-dev
           # 清理缓存，避免依赖冲突
           sudo apt autoremove -y && sudo apt clean
 
@@ -88,6 +89,7 @@ jobs:
         run: |
             # 创建编译目录
             mkdir -p ${{ env.LLVM_BUILD_DIR }}
+            mkdir -p "/home/runner/work/Build_kernel-oplus_For_Lenovo-TB375FC/Build_kernel-oplus_For_Lenovo-TB375FC/cmake-data"
             cd ${{ env.LLVM_BUILD_DIR }}
             # 配置cmake（仅编译Clang/LLVM，适配aarch64安卓交叉编译）
             cmake -G Ninja \
