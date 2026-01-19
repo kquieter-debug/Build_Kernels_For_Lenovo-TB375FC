@@ -25,7 +25,7 @@ jobs:
             libssl-dev libelf-dev repo curl wget zip unzip \
             ninja-build pkg-config libc6-dev-i386 \
             clang llvm lld make gcc-aarch64-linux-gnu \
-            aarch64-linux-gnu-gcc
+            gcc-aarch64-linux-gnu
           # 清理缓存，避免依赖冲突
           sudo apt autoremove -y && sudo apt clean
 
