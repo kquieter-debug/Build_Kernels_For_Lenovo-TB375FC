@@ -1,79 +1,147 @@
-name: 仅编译内核
 #############################
 #   Written by Muffin_Joe   #
 #############################
 #     I wrote this sh*t     #
 #############################
-on:
-  workflow_dispatch:  # 手动触发
+name: 仅编译内核
 
+on:
+  workflow_dispatch:  # 手动触发（核心保留）
+
+# 工作流任务配置
 jobs:
   build:
+    # 运行环境：Ubuntu 22.04
     runs-on: ubuntu-22.04
+    # 全局环境变量：提取关键路径，避免硬编码，便于维护
+    env:
+      KERNEL_REPO: kquieter-debug/android_kernel_modules_and_devicetree_oneplus_mt6897
+      KERNEL_BRANCH: oneplus/mt6897_v_15.0.0_oneplus_pad
+      KERNEL_SOURCE_DIR: ${{ github.workspace }}/kernel-source
+      KERNEL_BUILD_DIR: ${{ github.workspace }}/kernel-source/kernel
+      BAZEL_OUTPUT_DIR: ${{ github.workspace }}/kernel-source/bazel-out
+      PYTHON3_PREBUILTS_PATH: ${{ github.workspace }}/kernel-source/kernel/prebuilts/build-tools/path/linux-x86/
+
     steps:
-      # 配置依赖（仅保留内核编译必要项）
-      - name: Install Dependencies
+      # 步骤1：检出GitHub仓库代码（基础步骤）
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # 步骤2：缓存ccache（加速内核编译，避免重复编译）
+      - name: Cache ccache
+        uses: actions/cache@v3
+        with:
+          path: ~/.ccache
+          key: ${{ runner.os }}-ccache-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-ccache-
+
+      # 步骤3：缓存Bazel（加速Bazel依赖下载）
+      - name: Cache Bazel
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/bazel
+          key: ${{ runner.os }}-bazel-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-bazel-
+
+      # 步骤4：安装内核编译依赖（修复缓存、固定版本、校验工具）
+      - name: Install Build Dependencies
         run: |
-          set -e  # 命令失败立即退出
-          sudo apt update
-          sudo apt install -y \
+          set -euo pipefail  # 强化错误检测：未定义变量/管道失败均终止
+          # 修复apt缓存，升级基础包，避免依赖安装失败
+          sudo apt update --fix-missing
+          sudo apt upgrade -y
+          # 安装内核编译核心依赖（静默安装，避免交互）
+          sudo apt install -y -o DPkg::Options::="--force-confdef" \
             bc bison build-essential ccache curl flex \
             gcc-multilib git gnupg gperf \
             lib32ncurses5-dev lib32readline-dev lib32z1-dev \
             liblz4-tool libncurses5-dev libssl-dev \
-            python3 python3-pip \
-            npm
-          # 1. 指定bazelisk版本安装
-          sudo npm install -g @bazel/bazelisk
+            python3 python3-pip npm
+          # 固定Bazelisk版本（避免版本更新导致兼容问题）
+          sudo npm install -g @bazel/bazelisk@v1.18.0
+          # 校验关键工具版本，便于排查版本兼容问题
+          echo "🔍 环境校验 - Bazelisk版本：$(bazelisk --version)"
+          echo "🔍 环境校验 - Python3版本：$(python3 --version)"
+          echo "🔍 环境校验 - GCC版本：$(gcc --version | head -n1)"
+          echo "✅ 依赖安装完成，工具版本校验通过"
 
-      # 拉取内核源码仓库
-      - name: Checkout Kernel Source
-        uses: actions/checkout@v4
-        with:
-          repository: kquieter-debug/android_kernel_modules_and_devicetree_oneplus_mt6897
-          ref: oneplus/mt6897_v_15.0.0_oneplus_pad
-          path: kernel-source
-      # 设置Python3路径（满足内核编译脚本需求）
-      - name: Set Up Python3 Path for Kernel Build
+      # 步骤5：拉取内核源码（指定仓库/分支）
+      - name: Pull Kernel Source Code
         run: |
-          #创建缺失的目录层级
-          mkdir -p kernel-source/kernel/prebuilts/build-tools/path/linux-x86/
-          WHICH_PYTHON=$(which python3)
-          echo "系统Python3路径:$WHICH_PYTHON"  # 日志中验证路径
-          # 创建软链接：目标路径 = kernel-source/kernel/prebuilts/build-tools/path/linux-x86/python3
-          ln -s $WHICH_PYTHON kernel-source/kernel/prebuilts/build-tools/path/linux-x86/python3
-          # 验证目标路径是否为可执行文件（可选，用于日志排查）
-          #ls -la kernel-source/kernel/prebuilts/build-tools/path/linux-x86/python3
-          # 测试执行，确认能调用
-          kernel-source/kernel/prebuilts/build-tools/path/linux-x86/python3 --version
+          set -euo pipefail
+          # 克隆指定内核源码仓库到指定目录
+          git clone --depth=1 --branch=${KERNEL_BRANCH} \
+            https://github.com/${KERNEL_REPO}.git ${KERNEL_SOURCE_DIR}
+          # 校验源码拉取结果
+          if [ ! -d "${KERNEL_BUILD_DIR}" ]; then
+            echo "❌ 内核源码拉取失败，编译目录不存在"
+            exit 1
+          fi
+          echo "✅ 内核源码拉取完成，目录：${KERNEL_BUILD_DIR}"
 
-      # 打印目录结构（增加层级，验证路径）
-      #- name: Print Directory Structure
-      #  run: |
-      #    set -e
-      #    pwd
-      #    ls -la kernel-source/  # 直接查看内核源码根目录
-      #    find kernel-source -maxdepth 5 -type d  # 增加层级，确认关键目录
-
-      # 进入内核目录并执行编译（先确认Bazel配置路径）
-      - name: Build Kernel
+      # 步骤6：配置Python3路径（修复"文件不存在"错误）
+      - name: Set Up Python3 for Kernel Build
         run: |
-          set -e
-          # 优先确认Bazel配置在kernel-source根目录
-          cd kernel-source/kernel
-          # Bazel构建增加详细日志，失败时便于排查
-          bazelisk build //kernel:kernel_aarch64
+          set -euo pipefail
+          # 确保目标目录存在（核心修复：避免软链接创建失败）
+          [ -d "${PYTHON3_PREBUILTS_PATH}" ] || mkdir -p "${PYTHON3_PREBUILTS_PATH}"
+          # 获取系统Python3实际路径
+          SYSTEM_PYTHON3=$(which python3)
+          # 强制创建/覆盖Python3软链接（避免重复运行报错）
+          ln -sf "${SYSTEM_PYTHON3}" "${PYTHON3_PREBUILTS_PATH}/python3"
+          # 校验软链接有效性
+          if [ ! -x "${PYTHON3_PREBUILTS_PATH}/python3" ]; then
+            echo "❌ Python3软链接创建失败，路径无效：${PYTHON3_PREBUILTS_PATH}/python3"
+            exit 1
+          fi
+          echo "✅ Python3软链接配置完成，指向：${SYSTEM_PYTHON3}"
 
-      # 上传编译产物（匹配Bazel实际输出路径）
-      - name: Upload Kernel Image
+      # 步骤7：编译内核（详细日志，提升排查效率）
+      - name: Compile Kernel (aarch64)
+        run: |
+          set -euo pipefail
+          # 进入内核编译目录
+          cd ${KERNEL_BUILD_DIR}
+          # 执行Bazel编译（详细失败日志 + 多核编译加速）
+          bazelisk build //kernel:kernel_aarch64 \
+            --verbose_failures \
+            --sandbox_debug \
+            --jobs=$(nproc)
+          echo "✅ 内核编译完成"
+
+      # 步骤8：验证编译产物（避免上传空文件）
+      - name: Verify Kernel Artifacts
+        run: |
+          set -euo pipefail
+          # 查找编译后的img/dtb文件
+          ARTIFACTS=$(find ${BAZEL_OUTPUT_DIR} -name '*.img' -o -name '*.dtb')
+          if [ -z "${ARTIFACTS}" ]; then
+            echo "❌ 未找到编译后的内核镜像/设备树文件"
+            exit 1
+          fi
+          # 打印产物列表，便于核对
+          echo "✅ 编译产物验证通过，产物列表："
+          echo "${ARTIFACTS}"
+
+      # 步骤9：上传编译产物（仅前序步骤成功时执行）
+      - name: Upload Kernel Artifacts
         uses: actions/upload-artifact@v4
+        if: ${{ success() }}  # 仅编译/验证成功时上传
         with:
-          name: kernel-image
+          name: oneplus-mt6897-kernel-${{ github.sha }}
           path: |
-            # Bazel默认输出路径
-            kernel-source/bazel-out/**/*.img
-            kernel-source/bazel-out/**/*.dtb
-            # 兼容可能的out目录
-            #kernel-source/out/**/*.img
-            #kernel-source/out/**/*.dtb
-            echo "AI写得跟shit一样"
+            ${BAZEL_OUTPUT_DIR}/**/*.img
+            ${BAZEL_OUTPUT_DIR}/**/*.dtb
+          retention-days: 7  # 产物保留7天，可根据需求调整
+
+      # 步骤10：清理临时文件（无论成败都执行，避免磁盘溢出）
+      - name: Clean Up Build Env
+        if: ${{ always() }}  # 忽略前序步骤结果，强制执行
+        run: |
+          set -euo pipefail
+          # 清理缓存和编译临时文件
+          rm -rf ~/.ccache ~/.cache/bazel
+          rm -rf ${BAZEL_OUTPUT_DIR}
+          echo "✅ 临时文件清理完成"
