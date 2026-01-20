@@ -1,7 +1,11 @@
 name: 仅编译内核
-
+#############################
+#   Written by Muffin_Joe   #
+#############################
+#     I wrote this sh*t     #
+#############################
 on:
-  workflow_dispatch:
+  workflow_dispatch:  # 手动触发
 
 jobs:
   build:
@@ -21,18 +25,6 @@ jobs:
             npm
           # 1. 指定bazelisk版本安装
           sudo npm install -g @bazel/bazelisk
-          # 2. 创建缺失的目录层级（关键：路径要和脚本期望的完全一致）
-          mkdir -p kernel-source/kernel/prebuilts/build-tools/path/linux-x86/
-          # 3. 软链接系统Python3到目标路径（让python3路径直接指向可执行文件）
-          # 先确认系统Python3的路径（通常是/usr/bin/python3）
-          WHICH_PYTHON=$(which python3)
-          echo "系统Python3路径：$WHICH_PYTHON"  # 日志中验证路径
-          # 创建软链接：目标路径 = kernel-source/kernel/prebuilts/build-tools/path/linux-x86/python3
-          ln -s $WHICH_PYTHON kernel-source/kernel/prebuilts/build-tools/path/linux-x86/python3
-          # 4. 验证目标路径是否为可执行文件（可选，用于日志排查）
-          ls -la kernel-source/kernel/prebuilts/build-tools/path/linux-x86/python3
-          # 测试执行，确认能调用
-          kernel-source/kernel/prebuilts/build-tools/path/linux-x86/python3 --version
 
       # 拉取内核源码仓库
       - name: Checkout Kernel Source
@@ -41,23 +33,36 @@ jobs:
           repository: kquieter-debug/android_kernel_modules_and_devicetree_oneplus_mt6897
           ref: oneplus/mt6897_v_15.0.0_oneplus_pad
           path: kernel-source
+      # 设置Python3路径（满足内核编译脚本需求）
+      - name: Set Up Python3 Path for Kernel Build
+        run: |
+          创建缺失的目录层级
+          mkdir -p kernel-source/kernel/prebuilts/build-tools/path/linux-x86/
+          WHICH_PYTHON=$(which python3)
+          echo "系统Python3路径:$WHICH_PYTHON"  # 日志中验证路径
+          # 创建软链接：目标路径 = kernel-source/kernel/prebuilts/build-tools/path/linux-x86/python3
+          ln -s $WHICH_PYTHON kernel-source/kernel/prebuilts/build-tools/path/linux-x86/python3
+          # 验证目标路径是否为可执行文件（可选，用于日志排查）
+          #ls -la kernel-source/kernel/prebuilts/build-tools/path/linux-x86/python3
+          # 测试执行，确认能调用
+          kernel-source/kernel/prebuilts/build-tools/path/linux-x86/python3 --version
 
       # 打印目录结构（增加层级，验证路径）
-      - name: Print Directory Structure
-        run: |
-          set -e
-          pwd
-          ls -la kernel-source/  # 直接查看内核源码根目录
-          find kernel-source -maxdepth 5 -type d  # 增加层级，确认关键目录
+      #- name: Print Directory Structure
+      #  run: |
+      #    set -e
+      #    pwd
+      #    ls -la kernel-source/  # 直接查看内核源码根目录
+      #    find kernel-source -maxdepth 5 -type d  # 增加层级，确认关键目录
 
       # 进入内核目录并执行编译（先确认Bazel配置路径）
       - name: Build Kernel
         run: |
           set -e
-          # 优先确认Bazel配置在kernel-source根目录（根据实际仓库调整）
+          # 优先确认Bazel配置在kernel-source根目录
           cd kernel-source/kernel
           # Bazel构建增加详细日志，失败时便于排查
-          bazelisk build //kernel:kernel_aarch64 --verbose_failures --show_progress_rate_limit=30
+          bazelisk build //kernel:kernel_aarch64
 
       # 上传编译产物（匹配Bazel实际输出路径）
       - name: Upload Kernel Image
@@ -65,9 +70,10 @@ jobs:
         with:
           name: kernel-image
           path: |
-            # Bazel默认输出路径（根据实际构建产物调整）
+            # Bazel默认输出路径
             kernel-source/bazel-out/**/*.img
             kernel-source/bazel-out/**/*.dtb
-            # 兼容可能的out目录（若有自定义输出）
-            kernel-source/out/**/*.img
-            kernel-source/out/**/*.dtb
+            # 兼容可能的out目录
+            #kernel-source/out/**/*.img
+            #kernel-source/out/**/*.dtb
+            echo "AI写得跟shit一样"
