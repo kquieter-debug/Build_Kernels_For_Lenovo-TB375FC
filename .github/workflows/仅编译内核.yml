@@ -138,7 +138,7 @@ jobs:
 
       # 步骤10：清理临时文件（无论成败都执行，避免磁盘溢出）
       - name: Clean Up Build Env
-        if: ${{ always() }}  # 忽略前序步骤结果，强制执行
+        if: ${{ success() }}  # 忽略前序步骤结果，强制执行
         run: |
           set -euo pipefail
           # 清理缓存和编译临时文件
