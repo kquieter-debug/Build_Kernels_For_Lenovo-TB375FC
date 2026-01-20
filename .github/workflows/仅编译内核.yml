@@ -97,6 +97,10 @@ jobs:
             exit 1
           fi
           echo "✅ Python3软链接配置完成，指向：${SYSTEM_PYTHON3}"
+          BAZEL_TARGET_PATH="${KERNEL_BUILD_DIR}/prebuilts/bazel/linux-x86_64/"
+          mkdir -p ${BAZEL_TARGET_PATH}
+          curl -L https://github.com/bazelbuild/bazel/releases/download/9.0.0rc6/bazel-9.0.0rc6-linux-x86_64 -o ${BAZEL_TARGET_PATH}/bazel
+          chmod +x ${BAZEL_TARGET_PATH}/bazel
 
       # 步骤7：编译内核（详细日志，提升排查效率）
       - name: Compile Kernel (aarch64)
