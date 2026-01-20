@@ -36,7 +36,7 @@ jobs:
       # 设置Python3路径（满足内核编译脚本需求）
       - name: Set Up Python3 Path for Kernel Build
         run: |
-          创建缺失的目录层级
+          #创建缺失的目录层级
           mkdir -p kernel-source/kernel/prebuilts/build-tools/path/linux-x86/
           WHICH_PYTHON=$(which python3)
           echo "系统Python3路径:$WHICH_PYTHON"  # 日志中验证路径
