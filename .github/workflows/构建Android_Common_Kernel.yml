@@ -1,4 +1,4 @@
-name: Build Android Kernel with Bazel (with Caching)
+name: 构建A14-6.1的Common Kernel
 
 on:
   workflow_dispatch: # 手动触发工作流
