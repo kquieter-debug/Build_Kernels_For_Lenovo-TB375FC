@@ -3,17 +3,19 @@
 #############################
 #     I wrote this sh*t     #
 #############################
+#    AI真是写得一坨好石啊！   #
+#############################
 name: 仅编译内核
 
 on:
-  workflow_dispatch:  # 手动触发（核心保留）
+  workflow_dispatch:  # 手动触发
 
 # 工作流任务配置
 jobs:
   build:
     # 运行环境：Ubuntu 22.04
-    runs-on: ubuntu-22.04
-    # 全局环境变量：提取关键路径，避免硬编码，便于维护
+    runs-on: ubuntu-22.04       #不过为什么不用latest呢？
+    # 设置全局环境变量
     env:
       KERNEL_REPO: kquieter-debug/android_kernel_modules_and_devicetree_oneplus_mt6897
       KERNEL_BRANCH: oneplus/mt6897_v_15.0.0_oneplus_pad
@@ -23,12 +25,12 @@ jobs:
       PYTHON3_PREBUILTS_PATH: ${{ github.workspace }}/kernel-source/kernel/prebuilts/build-tools/path/linux-x86/
 
     steps:
-      # 步骤1：检出GitHub仓库代码（基础步骤）
-      - name: Checkout Repository
+      # 步骤1：检出GitHub仓库代码
+      - name: 检出代码
         uses: actions/checkout@v4
 
-      # 步骤2：缓存ccache（加速内核编译，避免重复编译）
-      - name: Cache ccache
+      # 步骤2：缓存ccache
+      - name: 设置 ccache
         uses: actions/cache@v3
         with:
           path: ~/.ccache
@@ -36,8 +38,8 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-ccache-
 
-      # 步骤3：缓存Bazel（加速Bazel依赖下载）
-      - name: Cache Bazel
+      # 步骤3：缓存Bazel
+      - name: 设置 Bazel Cache
         uses: actions/cache@v3
         with:
           path: ~/.cache/bazel
@@ -45,30 +47,36 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-bazel-
 
-      # 步骤4：安装内核编译依赖（修复缓存、固定版本、校验工具）
-      - name: Install Build Dependencies
+      # 步骤4：安装内核编译依赖
+      - name: 安装编译依赖
         run: |
           set -euo pipefail  # 强化错误检测：未定义变量/管道失败均终止
-          # 修复apt缓存，升级基础包，避免依赖安装失败
           sudo apt update --fix-missing
           sudo apt upgrade -y
-          # 安装内核编译核心依赖（静默安装，避免交互）
+          # 安装内核编译核心依赖
           sudo apt install -y -o DPkg::Options::="--force-confdef" \
             bc bison build-essential ccache curl flex \
             gcc-multilib git gnupg gperf \
             lib32ncurses5-dev lib32readline-dev lib32z1-dev \
             liblz4-tool libncurses5-dev libssl-dev \
             python3 python3-pip npm
-          # 固定Bazelisk版本（避免版本更新导致兼容问题）
+          # 固定Bazelisk版本
           sudo npm install -g @bazel/bazelisk@v1.18.0
-          # 校验关键工具版本，便于排查版本兼容问题
-          echo "🔍 环境校验 - Bazelisk版本：$(bazelisk --version)"
-          echo "🔍 环境校验 - Python3版本：$(python3 --version)"
-          echo "🔍 环境校验 - GCC版本：$(gcc --version | head -n1)"
-          echo "✅ 依赖安装完成，工具版本校验通过"
+          echo "🔍 环境校验 - Bazelisk版本:$(bazelisk --version)"
+          echo "🔍 环境校验 - Python3版本:$(python3 --version)"
+          echo "🔍 环境校验 - GCC版本:$(gcc --version | head -n1)"
 
-      # 步骤5：拉取内核源码（指定仓库/分支）
-      - name: Pull Kernel Source Code
+          # 输出点私货
+          echo -e "  \033[1;36mCharacter\033[0m: \033[1m曰\033[0m"  # 浅蓝标识+粗体“曰”
+          echo -e "┌─────────────────┐"
+          echo -e "│                 │"
+          echo -e "│      \033[1;34m曰\033[0m      │"  # 蓝色粗体突出显示“曰”
+          echo -e "│                 │"
+          echo -e "└─────────────────┘"
+          #我为什么要写这些东西
+
+      # 步骤5：拉取内核源码
+      - name: 拉取内核源码
         run: |
           set -euo pipefail
           # 克隆指定内核源码仓库到指定目录
@@ -76,61 +84,65 @@ jobs:
             https://github.com/${KERNEL_REPO}.git ${KERNEL_SOURCE_DIR}
           # 校验源码拉取结果
           if [ ! -d "${KERNEL_BUILD_DIR}" ]; then
-            echo "❌ 内核源码拉取失败，编译目录不存在"
+            echo "内核源码拉取失败，编译目录不存在"
             exit 1
           fi
-          echo "✅ 内核源码拉取完成，目录：${KERNEL_BUILD_DIR}"
+          echo "内核源码拉取完成，目录：${KERNEL_BUILD_DIR}"
 
-      # 步骤6：配置Python3路径（修复"文件不存在"错误）
-      - name: Set Up Python3 for Kernel Build
+      # 步骤6：配置Python3路径
+      - name: 配置Python3的路径
         run: |
           set -euo pipefail
-          # 确保目标目录存在（核心修复：避免软链接创建失败）
+
+          # 确保目标目录存在
           [ -d "${PYTHON3_PREBUILTS_PATH}" ] || mkdir -p "${PYTHON3_PREBUILTS_PATH}"
+
           # 获取系统Python3实际路径
           SYSTEM_PYTHON3=$(which python3)
-          # 强制创建/覆盖Python3软链接（避免重复运行报错）
+
+          # 强制创建/覆盖Python3软链接
           ln -sf "${SYSTEM_PYTHON3}" "${PYTHON3_PREBUILTS_PATH}/python3"
+
           # 校验软链接有效性
           if [ ! -x "${PYTHON3_PREBUILTS_PATH}/python3" ]; then
-            echo "❌ Python3软链接创建失败，路径无效：${PYTHON3_PREBUILTS_PATH}/python3"
+            echo "Python3软链接创建失败,路径无效：${PYTHON3_PREBUILTS_PATH}/python3"
             exit 1
           fi
-          echo "✅ Python3软链接配置完成，指向：${SYSTEM_PYTHON3}"
+          echo "Python3软链接配置完成,指向：${SYSTEM_PYTHON3}"
           BAZEL_TARGET_PATH="${KERNEL_BUILD_DIR}/prebuilts/bazel/linux-x86_64/"
           mkdir -p ${BAZEL_TARGET_PATH}
           curl -L https://github.com/bazelbuild/bazel/releases/download/9.0.0rc6/bazel-9.0.0rc6-linux-x86_64 -o ${BAZEL_TARGET_PATH}/bazel
           chmod +x ${BAZEL_TARGET_PATH}/bazel
 
-      # 步骤7：编译内核（详细日志，提升排查效率）
-      - name: Compile Kernel (aarch64)
+      # 步骤7：编译内核
+      - name: 编译内核
         run: |
           set -euo pipefail
           # 进入内核编译目录
           cd ${KERNEL_BUILD_DIR}
-          # 执行Bazel编译（详细失败日志 + 多核编译加速）
+          # 执行Bazel编译
           bazelisk build //kernel:kernel_aarch64 \
             --verbose_failures \
             --sandbox_debug \
             --jobs=$(nproc)
-          echo "✅ 内核编译完成"
+          echo "你说这玩意谁研究的？"
 
-      # 步骤8：验证编译产物（避免上传空文件）
-      - name: Verify Kernel Artifacts
+      # 步骤8：验证编译产物
+      - name: 验证编译产物
         run: |
           set -euo pipefail
           # 查找编译后的img/dtb文件
-          ARTIFACTS=$(find ${BAZEL_OUTPUT_DIR} -name '*.img' -o -name '*.dtb')
-          if [ -z "${ARTIFACTS}" ]; then
-            echo "❌ 未找到编译后的内核镜像/设备树文件"
+          ARTIFACTS=$(find ${BAZEL_OUTPUT_DIR} -name '*.img' -o -name '*.dtb')        #但是不对啊？我编译的不是只有内核吗？
+          if [ -z "${ARTIFACTS}" ]; then                                              #算了就这样写吧
+            echo "未找到编译后的内核镜像/设备树文件"
             exit 1
           fi
           # 打印产物列表，便于核对
-          echo "✅ 编译产物验证通过，产物列表："
+          echo "编译产物验证通过，产物列表："
           echo "${ARTIFACTS}"
 
-      # 步骤9：上传编译产物（仅前序步骤成功时执行）
-      - name: Upload Kernel Artifacts
+      # 步骤9：上传编译产物
+      - name: 上传编译产物
         uses: actions/upload-artifact@v4
         if: ${{ success() }}  # 仅编译/验证成功时上传
         with:
@@ -140,12 +152,12 @@ jobs:
             ${BAZEL_OUTPUT_DIR}/**/*.dtb
           retention-days: 7  # 产物保留7天，可根据需求调整
 
-      # 步骤10：清理临时文件（无论成败都执行，避免磁盘溢出）
-      - name: Clean Up Build Env
-        if: ${{ success() }}  # 忽略前序步骤结果，强制执行
+      # 步骤10：清理临时文件
+      - name: 清理临时文件
+        if: ${{ success() }}  # 傻逼ai写的'always',tmd前面编译有点问题就执行,麻痹！#
         run: |
           set -euo pipefail
           # 清理缓存和编译临时文件
           rm -rf ~/.ccache ~/.cache/bazel
           rm -rf ${BAZEL_OUTPUT_DIR}
-          echo "✅ 临时文件清理完成"
+          echo "临时文件清理完成"
