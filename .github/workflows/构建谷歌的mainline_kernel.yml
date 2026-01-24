@@ -47,19 +47,15 @@ jobs:
           sudo apt update && sudo apt install bazel
           sudo apt update && sudo apt full-upgrade
 
-      - name: 安装 repo 工具
-        run: |
-          mkdir -p ~/bin
-          curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
-          chmod a+x ~/bin/repo
-          export PATH=~/bin:$PATH
-
-      - name: 初始化 repo 并同步内核
+      # 移除了「安装 repo 工具」步骤
+      # 移除了「初始化 repo 并同步内核」步骤
+      # 新增：直接克隆谷歌主线内核仓库（替代 repo 同步逻辑）
+      - name: 克隆谷歌主线内核源码
         run: |
           mkdir android_kernel
           cd android_kernel
-          repo init -u https://android.googlesource.com/kernel/common.git -b android-mainline # 使用主线内核仓库和分支
-          repo sync -j$(nproc)
+          git clone https://android.googlesource.com/kernel/common.git .
+          git checkout android-mainline
 
       - name: 配置内核
         run: |
