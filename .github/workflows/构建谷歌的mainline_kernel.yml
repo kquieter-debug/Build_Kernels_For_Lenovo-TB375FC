@@ -68,7 +68,7 @@ jobs:
 
       # 7. 配置 Bazel 缓存
       - name: Cache Bazel build and dependencies
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           # 使用 Bazel 缓存目录
           path: |
