@@ -88,7 +88,7 @@ jobs:
 
       # 9. 保存构建结果
       - name: Save kernel image
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: kernel-image
           path: android_kernel/kernel/arch/arm64/boot/Image.gz-dtb
