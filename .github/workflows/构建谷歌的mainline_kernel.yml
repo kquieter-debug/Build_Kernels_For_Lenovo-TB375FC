@@ -51,8 +51,7 @@ jobs:
         run: |
           mkdir -p ~/.bin
           sudo curl -o ~/.bin/repo https://storage.googleapis.com/git-repo-downloads/repo
-          chmod a+x ~/.bin/repo
-          echo 'export PATH=$PATH:~/.bin' >> ~/.bashrc
+          sudo chmod a+x ~/.bin/repo
           echo 'export PATH=$PATH:~/.bin' >> ~/.bashrc
           source ~/.bashrc
 
