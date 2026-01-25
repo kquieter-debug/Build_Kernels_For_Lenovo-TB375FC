@@ -49,10 +49,11 @@ jobs:
 
       - name: 安装 repo 工具
         run: |
+          mkdir -p ~/.bin
+          mkdir -p ~/.bin/repo
           sudo curl https://storage.googleapis.com/git-repo-downloads/repo > ~/.bin/repo
-          mkdir -p ~/bin
           cp git-repo/repo ~/.bin/
-          chmod a+x ~/bin/repo
+          chmod a+x ~/.bin/repo
           echo 'export PATH=$PATH:~/.bin' >> ~/.bashrc
           source ~/.bashrcs
 
