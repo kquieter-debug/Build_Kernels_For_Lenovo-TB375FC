@@ -50,7 +50,7 @@ jobs:
       - name: 安装 repo 工具
         run: |
           mkdir -p ~/.bin
-          mkdir -p ~/.bin/repo
+          #mkdir -p ~/.bin/repo               #看来不用写这一行...
           sudo curl https://storage.googleapis.com/git-repo-downloads/repo > ~/.bin/repo
           cp git-repo/repo ~/.bin/
           chmod a+x ~/.bin/repo
