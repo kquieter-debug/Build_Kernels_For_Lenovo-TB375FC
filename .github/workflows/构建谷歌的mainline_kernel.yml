@@ -51,8 +51,7 @@ jobs:
         run: |
           mkdir -p ~/.bin
           sudo curl -o ~/.bin/repo https://storage.googleapis.com/git-repo-downloads/repo
-          chmod a+x ~/.bin/repo
-          echo 'export PATH=$PATH:~/.bin' >> ~/.bashrc
+          sudo chmod a+x ~/.bin/repo
           echo 'export PATH=$PATH:~/.bin' >> ~/.bashrc
           source ~/.bashrc
 
@@ -61,6 +60,7 @@ jobs:
           export PATH=$PATH:~/.bin
           mkdir android_kernel
           cd android_kernel
+          echo "开始同步内核"
           repo init -u https://android.googlesource.com/kernel/common.git -b android-mainline # 使用主线内核仓库和分支
           repo sync -j$(nproc)
 
