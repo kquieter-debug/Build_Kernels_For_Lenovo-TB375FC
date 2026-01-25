@@ -10,11 +10,9 @@ name: 仅编译内核
 on:
   workflow_dispatch:  # 手动触发
 
-# 工作流任务配置
 jobs:
   build:
-    # 运行环境：Ubuntu 22.04
-    runs-on: ubuntu-22.04       #不过为什么不用latest呢？
+    runs-on: ubuntu-latest       #为什么不用latest呢？
     # 设置全局环境变量
     env:
       KERNEL_REPO: kquieter-debug/android_kernel_modules_and_devicetree_oneplus_mt6897
@@ -22,14 +20,11 @@ jobs:
       KERNEL_SOURCE_DIR: ${{ github.workspace }}/kernel-source
       KERNEL_BUILD_DIR: ${{ github.workspace }}/kernel-source/kernel
       BAZEL_OUTPUT_DIR: ${{ github.workspace }}/kernel-source/bazel-out
-      PYTHON3_PREBUILTS_PATH: ${{ github.workspace }}/kernel-source/kernel/prebuilts/build-tools/path/linux-x86/
 
     steps:
-      # 步骤1：检出GitHub仓库代码
       - name: 检出代码
         uses: actions/checkout@v4
 
-      # 步骤2：缓存ccache
       - name: 设置 ccache
         uses: actions/cache@v3
         with:
@@ -38,7 +33,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-ccache-
 
-      # 步骤3：缓存Bazel
       - name: 设置 Bazel Cache
         uses: actions/cache@v3
         with:
@@ -47,24 +41,17 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-bazel-
 
-      # 步骤4：安装内核编译依赖
       - name: 安装编译依赖
         run: |
-          set -euo pipefail  # 强化错误检测：未定义变量/管道失败均终止
-          sudo apt update --fix-missing
-          sudo apt upgrade -y
+          sudo apt-get update
+          sudo apt-get upgrade -y
           # 安装内核编译核心依赖
-          sudo apt install -y -o DPkg::Options::="--force-confdef" \
+          sudo apt-get install -y -o DPkg::Options::="--force-confdef" \
             bc bison build-essential ccache curl flex \
             gcc-multilib git gnupg gperf \
             lib32ncurses5-dev lib32readline-dev lib32z1-dev \
             liblz4-tool libncurses5-dev libssl-dev \
-            python3 python3-pip npm
-          # 固定Bazelisk版本
-          sudo npm install -g @bazel/bazelisk@v1.18.0
-          echo "🔍 环境校验 - Bazelisk版本:$(bazelisk --version)"
-          echo "🔍 环境校验 - Python3版本:$(python3 --version)"
-          echo "🔍 环境校验 - GCC版本:$(gcc --version | head -n1)"
+            python3 python3-pip
 
           # 输出点私货
           echo -e "  \033[1;36mCharacter\033[0m: \033[1m曰\033[0m"  # 浅蓝标识+粗体“曰”
@@ -75,7 +62,14 @@ jobs:
           echo -e "└─────────────────┘"
           #我为什么要写这些东西
 
-      # 步骤5：拉取内核源码
+      - name: 安装 Bazel
+        run: |
+          sudo apt install curl gnupg
+          curl https://bazel.build/bazel-release.pub.gpg | sudo apt-key add -
+          echo "deb [arch=amd64] https://storage.googleapis.com/bazel-apt stable jdk1.8" | sudo tee /etc/apt/sources.list.d/bazel.list
+          sudo apt update && sudo apt install bazel
+          sudo apt update && sudo apt full-upgrade
+
       - name: 拉取内核源码
         run: |
           set -euo pipefail
@@ -89,32 +83,6 @@ jobs:
           fi
           echo "内核源码拉取完成，目录：${KERNEL_BUILD_DIR}"
 
-      # 步骤6：配置Python3路径
-      - name: 配置Python3的路径
-        run: |
-          set -euo pipefail
-
-          # 确保目标目录存在
-          [ -d "${PYTHON3_PREBUILTS_PATH}" ] || mkdir -p "${PYTHON3_PREBUILTS_PATH}"
-
-          # 获取系统Python3实际路径
-          SYSTEM_PYTHON3=$(which python3)
-
-          # 强制创建/覆盖Python3软链接
-          ln -sf "${SYSTEM_PYTHON3}" "${PYTHON3_PREBUILTS_PATH}/python3"
-
-          # 校验软链接有效性
-          if [ ! -x "${PYTHON3_PREBUILTS_PATH}/python3" ]; then
-            echo "Python3软链接创建失败,路径无效：${PYTHON3_PREBUILTS_PATH}/python3"
-            exit 1
-          fi
-          echo "Python3软链接配置完成,指向：${SYSTEM_PYTHON3}"
-          BAZEL_TARGET_PATH="${KERNEL_BUILD_DIR}/prebuilts/bazel/linux-x86_64/"
-          mkdir -p ${BAZEL_TARGET_PATH}
-          curl -L https://github.com/bazelbuild/bazel/releases/download/9.0.0rc6/bazel-9.0.0rc6-linux-x86_64 -o ${BAZEL_TARGET_PATH}/bazel
-          chmod +x ${BAZEL_TARGET_PATH}/bazel
-
-      # 步骤7：编译内核
       - name: 编译内核
         run: |
           set -euo pipefail
@@ -127,7 +95,6 @@ jobs:
             --jobs=$(nproc)
           echo "你说这玩意谁研究的？"
 
-      # 步骤8：验证编译产物
       - name: 验证编译产物
         run: |
           set -euo pipefail
@@ -141,7 +108,6 @@ jobs:
           echo "编译产物验证通过，产物列表："
           echo "${ARTIFACTS}"
 
-      # 步骤9：上传编译产物
       - name: 上传编译产物
         uses: actions/upload-artifact@v4
         if: ${{ success() }}  # 仅编译/验证成功时上传
@@ -152,7 +118,6 @@ jobs:
             ${BAZEL_OUTPUT_DIR}/**/*.dtb
           retention-days: 7  # 产物保留7天，可根据需求调整
 
-      # 步骤10：清理临时文件
       - name: 清理临时文件
         if: ${{ success() }}  # 傻逼ai写的'always',tmd前面编译有点问题就执行,麻痹！#
         run: |
