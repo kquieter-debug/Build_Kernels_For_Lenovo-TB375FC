@@ -73,11 +73,11 @@ jobs:
           repo init -u https://android.googlesource.com/kernel/manifest -b common-android-mainline # 使用主线内核仓库和分支
           repo sync -j$(nproc)
 
-      - name: 配置内核
-        run: |
-          cd android_kernel
-          # 使用 Mainline 配置文件
-          make ARCH=arm64 defconfig               #怎么好像都叫defconfig?
+      #- name: 配置内核
+      #  run: |
+      #    cd android_kernel
+      #    # 使用 Mainline 配置文件
+      #    make ARCH=arm64 defconfig               #怎么好像都叫defconfig?
 
       - name: 缓存 Bazel 构建和依赖
         uses: actions/cache@v3
