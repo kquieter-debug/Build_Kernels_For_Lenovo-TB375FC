@@ -19,6 +19,16 @@ jobs:
       - name: 检出代码
         uses: actions/checkout@v3
 
+      - name: 最大化构建空间
+        uses: easimon/maximize-build-space@master
+        with:
+          root-reserve-mb: 8192
+          temp-reserve-mb: 4096
+          remove-dotnet: 'true'
+          remove-android: 'true'
+          remove-haskell: 'true'
+          remove-codeql: 'true'
+
       - name: 安装依赖
         run: |
           sudo apt-get update
