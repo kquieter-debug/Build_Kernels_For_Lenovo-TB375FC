@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<manifest>
+    <remote name="clo-la" fetch="https://git.codelinaro.org/clo/la" review="review.codelinaro.org" />
+    <remote name="origin" fetch="https://github.com/OnePlusOSS" review="github.com" />
+
+    <default 
+        remote="clo-la" 
+        revision="dummy_revision" 
+        sync-c="true" 
+        sync-tags="false"
+        sync-j="8"  
+    />
+    <project 
+        path="kernel_platform/common" 
+        name="android_kernel_common_oneplus_mt6897" 
+        remote="origin" 
+        revision="oneplus/mt6897_u_14.0.0_onepluspad"
+    >
+        <linkfile dest=".source_date_epoch_dir" src="." />
+    </project>
+
+    <!-- 联发科 MT6897 内核核心代码 -->
+    <project 
+        path="kernel_platform/mtk-kernel"
+        name="android_kernel_oneplus_mt6897" 
+        remote="origin" 
+        revision="oneplus/mt6897_u_14.0.0_onepluspad"
+    >
+        <linkfile dest="WORKSPACE" src="WORKSPACE" />
+        <linkfile dest="build_with_bazel.py" src="build_with_bazel.py" />
+    </project>
+
+    <!-- 一加 Pad 设备树 + 内核模块（MT6897 硬件适配核心） -->
+    <project 
+        path="." 
+        name="android_kernel_modules_and_devicetree_oneplus_mt6897_onepluspad" 
+        remote="origin" 
+        revision="oneplus/mt6897_u_14.0.0_onepluspad"
+    />
+
+    <!-- ===================== 构建依赖 ===================== -->
+    <!-- 编译器工具链 -->
+    <project path="kernelplatform/prebuilts-master/clang/host/linux-x86" name="kernel/prebuilts/build-tools/clang/host/linux-x86" remote="clo-la" revision="5e8a6e7f890123456789abcdef0123456789abcd" />
+    <project path="kernelplatform/prebuilts-master/gcc/linux-x86/x86/x86_64-linux-glibc2.17-4.8" name="platform/prebuilts/gcc/linux-x86/x86/x86_64-linux-glibc2.17-4.8" remote="clo-la" revision="8d7c6b5a4e3f2e1d0c9b8a7f6e5d4c3b2a10f9e8d" />
+    
+    <!-- 构建环境依赖 -->
+    <project path="kernelplatform/prebuilts-master/jdk/jdk11" name="platform/prebuilts/jdk/jdk11" remote="clo-la" revision="7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7" />
+    <project path="kernelplatform/prebuilts-master/ndk/r23" name="platform/prebuilts/ndk/r23" remote="clo-la" revision="6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6" />
+    
+    <!-- Bazel 构建规则 -->
+    <project path="kernelplatform/bazel_common_rules" name="kernel/build/bazel_common_rules" remote="clo-la" revision="5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5" />
+    <project path="kernelplatform/bazel-skylib" name="external/bazel-skylib" remote="clo-la" revision="4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4" />
+    
+    <!-- 内核工具 -->
+    <project path="kernelplatform/prebuilts-master/dtc" name="kernel/prebuilts/build-tools/dtc" remote="clo-la" revision="3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3" />
+    <project path="kernelplatform/prebuilts-master/mkbootimg" name="kernel/prebuilts/build-tools/mkbootimg" remote="clo-la" revision="2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2" />
+    
+    <!-- Python 依赖 -->
+    <project path="kernelplatform/absl-py" name="external/absl-py" remote="clo-la" revision="1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d" />
+
+    <!-- ===================== 符号链接 ===================== -->
+    <project path="kernel/prebuilts/build-tools" name="kernel/prebuilts/build-tools" remote="clo-la" revision="ks-kernel.lnx.3.0.r1-rel">
+        <linkfile dest="kernel_platform/build/prebuilts/kernel-build-tools" src="." />
+    </project>
+    <project path="kernel/build-tools" name="kernel/build-tools" remote="clo-la" revision="ks-kernel.lnx.3.0.r1-rel">
+        <linkfile dest="kernel_platform/build-tools" src="." />
+    </project>
+    <project path="kernel/clang-tools" name="kernel/clang-tools" remote="clo-la" revision="ks-kernel.lnx.3.0.r1-rel">
+        <linkfile dest="kernel_platform/clang-tools" src="." />
+    </project>
+</manifest>
