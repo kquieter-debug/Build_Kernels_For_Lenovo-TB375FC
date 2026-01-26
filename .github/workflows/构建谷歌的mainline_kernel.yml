@@ -58,10 +58,9 @@ jobs:
       - name: 初始化 repo 并同步内核
         run: |
           export PATH=$PATH:~/.bin
-          mkdir android_kernel
-          cd android_kernel
+          mkdir android_kernel && cd android_kernel
           echo "开始同步内核"
-          repo init -u https://android.googlesource.com/kernel/common.git -b android-mainline # 使用主线内核仓库和分支
+          repo init -u https://android.googlesource.com/kernel/manifest -b android-mainline # 使用主线内核仓库和分支
           repo sync -j$(nproc)
 
       - name: 配置内核

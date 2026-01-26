@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<manifest>
+    <!-- 国内推荐使用清华镜像加速，海外可替换为官方地址：https://android.googlesource.com/ -->
+    <remote
+        name="aosp"
+        fetch="https://android.googlesource.com/kernel/common.git/"
+        review="android-review.googlesource.com"
+        revision="refs/tags/android-14.0.0_r50" />
+
+    <!-- 2. 全局默认配置 -->
+    <default
+        remote="aosp"
+        revision="android-mainline" 
+        sync-j="16"         <!-- 同步并发数,建议设为CPU核心数的2倍 -->
+        sync-c="true"       <!-- 仅同步当前分支，减少冗余数据 -->
+        sync-depth="1" />   <!-- 浅克隆（仅最新提交），首次同步可设为1加速，需完整历史可删除此属性 -->
+
+    <!-- 主线通用内核 -->
+    <project
+        name="kernel/common"
+        path="kernel/common"
+        groups="kernel" />
+</manifest>
