@@ -8,59 +8,46 @@
 name: 仅编译内核
 
 on:
-  workflow_dispatch:  # 手动触发
+  workflow_dispatch: # 手动触发工作流
 
 jobs:
   build:
-    runs-on: ubuntu-latest       #为什么不用latest呢？
-    # 设置全局环境变量
-    env:
-      KERNEL_REPO: kquieter-debug/android_kernel_modules_and_devicetree_oneplus_mt6897
-      KERNEL_BRANCH: oneplus/mt6897_v_15.0.0_oneplus_pad
-      KERNEL_SOURCE_DIR: ${{ github.workspace }}/kernel-source
-      KERNEL_BUILD_DIR: ${{ github.workspace }}/kernel-source/kernel
-      BAZEL_OUTPUT_DIR: ${{ github.workspace }}/kernel-source/bazel-out
+    runs-on: ubuntu-latest
 
     steps:
+
       - name: 检出代码
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
-      - name: 设置 ccache
-        uses: actions/cache@v3
+      - name: 最大化构建空间
+        uses: easimon/maximize-build-space@master
         with:
-          path: ~/.ccache
-          key: ${{ runner.os }}-ccache-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-ccache-
+          root-reserve-mb: 8192
+          temp-reserve-mb: 4096
+          remove-dotnet: 'true'
+          remove-android: 'true'
+          remove-haskell: 'true'
+          remove-codeql: 'true'
 
-      - name: 设置 Bazel Cache
-        uses: actions/cache@v3
-        with:
-          path: ~/.cache/bazel
-          key: ${{ runner.os }}-bazel-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-bazel-
-
-      - name: 安装编译依赖
+      - name: 安装依赖
         run: |
           sudo apt-get update
-          sudo apt-get upgrade -y
-          # 安装内核编译核心依赖
-          sudo apt-get install -y -o DPkg::Options::="--force-confdef" \
-            bc bison build-essential ccache curl flex \
-            gcc-multilib git gnupg gperf \
-            lib32ncurses5-dev lib32readline-dev lib32z1-dev \
-            liblz4-tool libncurses5-dev libssl-dev \
-            python3 python3-pip
-
-          # 输出点私货
-          echo -e "  \033[1;36mCharacter\033[0m: \033[1m曰\033[0m"  # 浅蓝标识+粗体“曰”
-          echo -e "┌─────────────────┐"
-          echo -e "│                 │"
-          echo -e "│      \033[1;34m曰\033[0m      │"  # 蓝色粗体突出显示“曰”
-          echo -e "│                 │"
-          echo -e "└─────────────────┘"
-          #我为什么要写这些东西
+          sudo apt-get install -y \
+            curl \
+            git \
+            openjdk-11-jdk \
+            wget \
+            unzip \
+            python3 \
+            python3-pip \
+            python3-setuptools \
+            build-essential \
+            ccache \
+            zlib1g-dev \
+            libncurses5-dev \
+            libssl-dev \
+            libxml2-utils \
+            bc                #怎么写成这样...
 
       - name: 安装 Bazel
         run: |
@@ -70,59 +57,42 @@ jobs:
           sudo apt update && sudo apt install bazel
           sudo apt update && sudo apt full-upgrade
 
-      - name: 拉取内核源码
+      - name: 安装 repo 工具
         run: |
-          set -euo pipefail
-          # 克隆指定内核源码仓库到指定目录
-          git clone --depth=1 --branch=${KERNEL_BRANCH} \
-            https://github.com/${KERNEL_REPO}.git ${KERNEL_SOURCE_DIR}
-          # 校验源码拉取结果
-          if [ ! -d "${KERNEL_BUILD_DIR}" ]; then
-            echo "内核源码拉取失败，编译目录不存在"
-            exit 1
-          fi
-          echo "内核源码拉取完成，目录：${KERNEL_BUILD_DIR}"
+          mkdir -p ~/.bin
+          sudo curl -o ~/.bin/repo https://storage.googleapis.com/git-repo-downloads/repo
+          sudo chmod a+x ~/.bin/repo
+          echo 'export PATH=$PATH:~/.bin' >> ~/.bashrc
+          source ~/.bashrc
 
-      - name: 编译内核
+      - name: 初始化 repo 并同步内核
         run: |
-          set -euo pipefail
-          # 进入内核编译目录
-          cd ${KERNEL_BUILD_DIR}
-          # 执行Bazel编译
-          bazelisk build //kernel:kernel_aarch64 \
-            --verbose_failures \
-            --sandbox_debug \
-            --jobs=$(nproc)
-          echo "你说这玩意谁研究的？"
+          export PATH=$PATH:~/.bin
+          mkdir android_kernel && cd android_kernel
+          echo "开始同步内核"
+          repo init -u https://github.com/kquieter-debug/Build_Kernels_For_Lenovo-TB375FC/blob/main/SomeManifests -b oneplus_pad
+          repo sync -j$(nproc)
 
-      - name: 验证编译产物
-        run: |
-          set -euo pipefail
-          # 查找编译后的img/dtb文件
-          ARTIFACTS=$(find ${BAZEL_OUTPUT_DIR} -name '*.img' -o -name '*.dtb')        #但是不对啊？我编译的不是只有内核吗？
-          if [ -z "${ARTIFACTS}" ]; then                                              #算了就这样写吧
-            echo "未找到编译后的内核镜像/设备树文件"
-            exit 1
-          fi
-          # 打印产物列表，便于核对
-          echo "编译产物验证通过，产物列表："
-          echo "${ARTIFACTS}"
-
-      - name: 上传编译产物
-        uses: actions/upload-artifact@v4
-        if: ${{ success() }}  # 仅编译/验证成功时上传
+      - name: 缓存 Bazel 构建和依赖
+        uses: actions/cache@v3
         with:
-          name: oneplus-mt6897-kernel-${{ github.sha }}
+          # 使用 Bazel 缓存目录
           path: |
-            ${BAZEL_OUTPUT_DIR}/**/*.img
-            ${BAZEL_OUTPUT_DIR}/**/*.dtb
-          retention-days: 7  # 产物保留7天，可根据需求调整
+            ~/.cache/bazel
+            ~/.bazel-<user>-local
+            android_kernel/.bazel-out
+          key: ${{ runner.os }}-bazel-${{ hashFiles('**/*.bazel*') }}
+          restore-keys: |
+            ${{ runner.os }}-bazel-
 
-      - name: 清理临时文件
-        if: ${{ success() }}  # 傻逼ai写的'always',tmd前面编译有点问题就执行,麻痹！#
+      - name: 使用 Bazel 构建内核
         run: |
-          set -euo pipefail
-          # 清理缓存和编译临时文件
-          rm -rf ~/.ccache ~/.cache/bazel
-          rm -rf ${BAZEL_OUTPUT_DIR}
-          echo "临时文件清理完成"
+          cd android_kernel
+          # 使用 Bazel 构建内核
+          bazel build //kernel:kernel_image
+
+      - name: 上传结果
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernel-image
+          path: android_kernel/kernel/arch/arm64/boot/Image.gz-dtb
