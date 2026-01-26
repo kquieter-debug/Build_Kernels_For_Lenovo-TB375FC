@@ -94,11 +94,13 @@ jobs:
       - name: 使用 Bazel 构建内核
         run: |
           cd android_kernel
+          export DIST_DIR="$GITHUB_WORKSPACE/kernel_build_output"
+          mkdir -p "$DIST_DIR"
           # 使用 Bazel 构建内核
-          bazel build //kernel:kernel_image
+          tools/bazel run //common:kernel_aarch64_dist -- --destdir="$DIST_DIR"
 
       - name: 上传结果
         uses: actions/upload-artifact@v4
         with:
           name: kernel-image
-          path: android_kernel/kernel/arch/arm64/boot/Image.gz-dtb
+          path: ${{ github.workspace }}/kernel_build_output/
