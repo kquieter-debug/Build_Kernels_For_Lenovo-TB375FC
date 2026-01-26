@@ -78,7 +78,7 @@ jobs:
 
       - name: 使用 Bazel 构建内核
         run: |
-          cd oneplus_kernel/kernel/kernel_device_module-6.1
+          cd oneplus_kernel/kernel/kernel_device_modules-6.1
           # 使用 Bazel 构建内核
           bazel build //kernel:kernel_image
 
