@@ -70,7 +70,7 @@ jobs:
           export PATH=$PATH:~/.bin
           mkdir android_kernel && cd android_kernel
           echo "开始同步内核"
-          repo init -u https://github.com/kquieter-debug/Build_Kernels_For_Lenovo-TB375FC/blob/main/SomeManifests -b oneplus_pad
+          repo init -u https://github.com/kquieter-debug/Build_Kernels_For_Lenovo-TB375FC -m SomeManifests/oneplus_pad.xml
           repo sync -j$(nproc)
 
       - name: 缓存 Bazel 构建和依赖
