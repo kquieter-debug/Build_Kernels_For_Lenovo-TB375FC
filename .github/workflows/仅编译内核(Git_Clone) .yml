@@ -56,22 +56,13 @@ jobs:
           echo "deb [arch=amd64] https://storage.googleapis.com/bazel-apt stable jdk1.8" | sudo tee /etc/apt/sources.list.d/bazel.list
           sudo apt update && sudo apt install bazel
           sudo apt update && sudo apt full-upgrade
+          bazel --version
 
-      - name: 安装 repo 工具
+      - name: 拉取内核源码
         run: |
-          mkdir -p ~/.bin
-          sudo curl -o ~/.bin/repo https://storage.googleapis.com/git-repo-downloads/repo
-          sudo chmod a+x ~/.bin/repo
-          echo 'export PATH=$PATH:~/.bin' >> ~/.bashrc
-          source ~/.bashrc
-
-      - name: 初始化 repo 并同步内核
-        run: |
-          export PATH=$PATH:~/.bin
-          mkdir android_kernel && cd android_kernel
-          echo "开始同步内核"
-          repo init -u https://github.com/kquieter-debug/Build_Kernels_For_Lenovo-TB375FC -m SomeManifests/oneplus_pad.xml
-          repo sync -j$(nproc)
+          git clone -b oneplus/mt6897_b_16.0.0_nord_ce5 https://github.com/kquieter-debug/android_kernel_modules_and_devicetree_oneplus_mt6897.git oneplus_kernel
+          cd oneplus_kernel
+          echo "内核源码拉取完成"
 
       - name: 缓存 Bazel 构建和依赖
         uses: actions/cache@v3
@@ -80,14 +71,14 @@ jobs:
           path: |
             ~/.cache/bazel
             ~/.bazel-<user>-local
-            android_kernel/.bazel-out
+            oneplus_kernel/.bazel-out
           key: ${{ runner.os }}-bazel-${{ hashFiles('**/*.bazel*') }}
           restore-keys: |
             ${{ runner.os }}-bazel-
 
       - name: 使用 Bazel 构建内核
         run: |
-          cd android_kernel
+          cd oneplus_kernel
           # 使用 Bazel 构建内核
           bazel build //kernel:kernel_image
 
@@ -95,4 +86,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: kernel-image
-          path: android_kernel/kernel/arch/arm64/boot/Image.gz-dtb
+          path: oneplus_kernel/kernel/arch/arm64/boot/Image.gz-dtb

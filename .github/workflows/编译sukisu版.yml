@@ -9,7 +9,6 @@ name: 编译带有SukiSU-Ultra的内核
 # 触发条件：手动运行优先 + push主分支自动运行
 on:
   workflow_dispatch:
-    branches: [main, master]
 
 # 取消并发编译，避免资源/磁盘冲突
 concurrency:
