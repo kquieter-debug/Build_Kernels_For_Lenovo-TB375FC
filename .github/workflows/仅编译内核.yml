@@ -41,7 +41,7 @@ jobs:
             build-essential \
             zlib1g-dev \
             libncurses5-dev libssl-dev libxml2-utils \
-            bc                #怎么写成这样...
+            clang llvm               #怎么写成这样...
 
       - name: 拉取交叉编译链
         run: |
