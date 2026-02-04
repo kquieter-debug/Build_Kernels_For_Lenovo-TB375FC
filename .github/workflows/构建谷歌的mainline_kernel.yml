@@ -99,6 +99,17 @@ jobs:
           # 使用 Bazel 构建内核
           tools/bazel run //common:kernel_aarch64_dist -- --destdir="$DIST_DIR"
 
+      - name: 使用AnyKernel3打包内核
+        run: |
+          git clone --depth 1 https://github.com/AnyKernel/AnyKernel3.git
+          cd AnyKernel3
+          cp -f ${GITHUB_WORKSPACE}/kernel_build_output/kernel Image.gz-dtb ramdisk/
+          cd ..
+          sed -i 's/do.devicecheck=1/do.devicecheck=0/g' AnyKernel3/anykernel.sh						# 不检测设备的名称
+          sed -i 's!BLOCK=/dev/block/platform/omap/omap_hsmmc.0/by-name/boot;!BLOCK=auto;!g' AnyKernel3/anykernel.sh	# 自动选择内核分区
+          sed -i 's/IS_SLOT_DEVICE=0;/IS_SLOT_DEVICE=auto;/g' AnyKernel3/anykernel.sh
+            zip -r9 ${GITHUB_WORKSPACE}/kernel_build_output/mainline_kernel.zip AnyKernel3/*
+
       - name: 上传结果
         uses: actions/upload-artifact@v4
         with:
