@@ -5,7 +5,7 @@
 #############################
 #    AI真是写得一坨好石啊！   #
 #############################
-name: 仅编译内核(REPO)(DO NOT USE THIS! Dose not Working!)
+name: 仅编译内核(llvm\clang)(DO NOT USE THIS! Dose not Working!)
 
 on:
   workflow_dispatch: # 手动触发工作流
@@ -29,70 +29,100 @@ jobs:
           remove-haskell: 'true'
           remove-codeql: 'true'
 
-      - name: 安装依赖
+      - name: 安装依赖\初始化仓库\安装工具链
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            curl \
-            git \
-            openjdk-11-jdk \
-            wget \
-            unzip \
-            python3 \
-            python3-pip \
-            python3-setuptools \
-            build-essential \
-            ccache \
-            zlib1g-dev \
-            libncurses5-dev \
-            libssl-dev \
-            libxml2-utils \
-            bc                #怎么写成这样...
+          rm -rf kernel_workspace
+          mkdir kernel_workspace
+          cd kernel_workspace
+          sudo apt update
+          sudo apt-mark install -y hold firefox &&
+          sudo apt hold libc-bin &&
+          sudo apt purge man-db &&
+          sudo rm -rf /var/lib/man-db/auto-update &&
+          sudo apt update &&
+          sudo apt-get install -y --no-install-recommends binutils python-is-python3 libssl-dev libelf-dev ccache wget &
 
-      - name: 安装 Bazel
+      - name: 同步内核仓库
+       run: |
+          aria2c -s16 -x16 -k1M https://github.com/oppo-source/android_kernel_oppo_mt6897/archive/refs/heads/oppo/mt6897_v_15.0.0_oppopad3.zip -o common.zip &&
+          unzip -q common.zip && mv "android_kernel_oppo_mt6897-oppo-mt6897_v_15.0.0_oppopad3" common && rm -rf common.zip
+
+      - name: 安装LLVM和Clang工具链
         run: |
-          sudo apt install curl gnupg
-          curl https://bazel.build/bazel-release.pub.gpg | sudo apt-key add -
-          echo "deb [arch=amd64] https://storage.googleapis.com/bazel-apt stable jdk1.8" | sudo tee /etc/apt/sources.list.d/bazel.list
-          sudo apt update && sudo apt install bazel
-          sudo apt update && sudo apt full-upgrade
+          mkdir -p clang20 &&
+          cd clang20 &&
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 20
+          export PATH="/usr/lib/llvm-20/bin:$PATH"
+          wait
 
-      - name: 安装 repo 工具
+          echo "去除 ABI 保护 & 去除 dirty 后缀..."
+          rm common/android/abi_gki_protected_exports_* || true
+          for f in common/scripts/setlocalversion; do
+            sed -i 's/ -dirty//g' "$f"
+            sed -i '$i res=$(echo "$res" | sed '\''s/-dirty//g'\'')' "$f"
+          done
+
+      - name: 配置缓存
         run: |
-          mkdir -p ~/.bin
-          sudo curl -o ~/.bin/repo https://storage.googleapis.com/git-repo-downloads/repo
-          sudo chmod a+x ~/.bin/repo
-          echo 'export PATH=$PATH:~/.bin' >> ~/.bashrc
-          source ~/.bashrc
+          echo "CCACHE_DIR=$HOME/.ccache_Kernel" >> $GITHUB_ENV
+          echo "CCACHE_MAXSIZE=3G" >> $GITHUB_ENV
+          echo "当前磁盘空间："
+          df -h
 
-      - name: 初始化 repo 并同步内核
-        run: |
-          export PATH=$PATH:~/.bin
-          mkdir android_kernel && cd android_kernel
-          echo "开始同步内核"
-          repo init -u https://github.com/kquieter-debug/Build_Kernels_For_Lenovo-TB375FC -m SomeManifests/oneplus_pad.xml
-          repo sync -j$(nproc)
-
-      - name: 缓存 Bazel 构建和依赖
-        uses: actions/cache@v3
+      - name: 载入当前ccache缓存
+        uses: actions/cache@v4
         with:
-          # 使用 Bazel 缓存目录
           path: |
-            ~/.cache/bazel
-            ~/.bazel-<user>-local
-            android_kernel/.bazel-out
-          key: ${{ runner.os }}-bazel-${{ hashFiles('**/*.bazel*') }}
+            ~/.ccache_Kernel
+          key: ${{ runner.os }}-ccache-${{ hashFiles('**/*.ccache*') }}
           restore-keys: |
-            ${{ runner.os }}-bazel-
+            ${{ runner.os }}-ccache-
 
-      - name: 使用 Bazel 构建内核
+      - name: 初始化缓存
         run: |
-          cd android_kernel
-          # 使用 Bazel 构建内核
-          bazel build //kernel:kernel_image
+          # 设置ccache环境变量
+          export CCACHE_COMPILERCHECK="none"
+          export CCACHE_BASEDIR="${{ github.workspace }}"
+          export CCACHE_NOHASHDIR="true"
+          export CCACHE_HARDLINK="true"
+          export CCACHE_DIR="${{ env.CCACHE_DIR }}"
+          export CCACHE_MAXSIZE="${{ env.CCACHE_MAXSIZE }}"
+          
+
+      - name: 开始构建内核
+        run: |
+          cd common
+          export PATH="/usr/lib/llvm-20/bin:$PATH"
+          export CC=clang
+          export CXX=clang++
+          export AR=llvm-ar
+          export AS=llvm-as
+          export NM=llvm-nm
+          export OBJCOPY=llvm-objcopy
+          export OBJDUMP=llvm-objdump
+          export RANLIB=llvm-ranlib
+          export STRIP=llvm-strip
+
+          make O=out ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- -j$(nproc) defconfig
+          make O=out ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- -j$(nproc) Image.gz-dtb
+
+      - name: 显示构建结果
+        run: |
+          ls -lh common/out/arch/arm64/boot/Image.gz-dtb
+      
+      - name: 使用Anykernel3打包内核
+        run: |
+          cd common
+          git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git
+          cp out/arch/arm64/boot/Image.gz-dtb AnyKernel3/
+          cd AnyKernel3
+          zip -r9 ../kernel-image.zip ./*
+
 
       - name: 上传结果
         uses: actions/upload-artifact@v4
         with:
           name: kernel-image
-          path: android_kernel/kernel/arch/arm64/boot/Image.gz-dtb
+          path: common/AnyKernel3/kernel-image.zip
