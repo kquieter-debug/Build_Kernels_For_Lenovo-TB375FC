@@ -43,7 +43,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends binutils python-is-python3 libssl-dev libelf-dev ccache wget &
 
       - name: 同步内核仓库
-       run: |
+        run: |
           aria2c -s16 -x16 -k1M https://github.com/oppo-source/android_kernel_oppo_mt6897/archive/refs/heads/oppo/mt6897_v_15.0.0_oppopad3.zip -o common.zip &&
           unzip -q common.zip && mv "android_kernel_oppo_mt6897-oppo-mt6897_v_15.0.0_oppopad3" common && rm -rf common.zip
 
