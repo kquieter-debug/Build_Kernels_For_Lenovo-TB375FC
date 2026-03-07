@@ -1,91 +1,142 @@
-#############################
-#   Written by Muffin_Joe   #
-#############################
-#     I wrote this sh*t     #
-#############################
-#    AI真是写得一坨好石啊！   #
-#############################
 name: 仅编译内核
 
+# 仅手动触发工作流
 on:
-  workflow_dispatch: # 手动触发工作流
+  workflow_dispatch:
 
+# 运行环境
 jobs:
-  build:
+  build_kernel:
     runs-on: ubuntu-latest
-
     steps:
-
+      # 步骤1：检出代码
       - name: 检出代码
         uses: actions/checkout@v3
 
+      # 步骤2：最大化构建空间（清理系统冗余）
       - name: 最大化构建空间
         uses: easimon/maximize-build-space@master
         with:
-          root-reserve-mb: 8192
-          temp-reserve-mb: 4096
-          remove-dotnet: 'true'
-          remove-android: 'true'
-          remove-haskell: 'true'
-          remove-codeql: 'true'
+          remove_dotnet: true
+          remove_android: true
+          remove_haskell: true
+          remove_codeql: true
+          root_reserve_space: 10GB
+          swap_size: 10GB
 
-      - name: 安装依赖
+      # 步骤3：安装完整依赖（含ccache+clang+交叉编译链）
+      - name: 安装编译依赖
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            curl build-essential git \
-            openjdk-11-jdk \
-            wget bison flex libssl-dev \
-            unzip \
-            python3 python3-pip python3-setuptools \
-            build-essential \
-            zlib1g-dev \
-            libncurses5-dev libssl-dev libxml2-utils \
-            clang llvm lld
+          # 更新系统源并安装所有必要工具
+          sudo apt update -y && sudo apt upgrade -y
+          sudo apt install -y \
+            ccache curl git build-essential libssl-dev \
+            python3 python3-pip flex bison bc libelf-dev \
+            llvm clang lld libclang-dev gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi \
+            zip unzip rsync device-tree-compiler
 
-      - name: 拉取交叉编译链
+          # 验证关键工具是否安装成功（便于排查问题）
+          echo "===== 验证工具版本 ====="
+          clang --version
+          ccache --version
+          aarch64-linux-gnu-gcc --version
+          ld.lld --version
+
+          # 配置环境变量，确保编译器路径优先
+          echo "PATH=/usr/lib/ccache:/usr/bin:$PATH" >> $GITHUB_ENV
+          echo "CCACHE_DIR=/tmp/ccache" >> $GITHUB_ENV
+
+      # 步骤4：拉取Proton Clang编译链（可选，若系统clang版本不足则用这个）
+      - name: 拉取Proton Clang编译链
         run: |
-          git clone --depth 1 https://github.com/kdrag0n/proton-clang  # 拉取 Proton Clang 编译器
-          export PATH=$PATH:~/proton-clang/bin  # 把 Proton Clang 添加到环境变量
-          export CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- CLANG_TRIPLE=aarch64-linux-gnu-  # 设置交叉编译前缀
+          git clone --depth=1 https://github.com/kdrag0n/proton-clang.git clang
+          # 将自定义clang加入环境变量
+          echo "CLANG_PATH=$(pwd)/clang/bin" >> $GITHUB_ENV
+          echo "PATH=$(pwd)/clang/bin:$PATH" >> $GITHUB_ENV
+          # 配置交叉编译前缀
+          echo "CROSS_COMPILE=aarch64-linux-gnu-" >> $GITHUB_ENV
+          echo "CROSS_COMPILE_ARM32=arm-linux-gnueabi-" >> $GITHUB_ENV
 
-
-      - name: 拉取内核源码 
+      # 步骤5：拉取内核源码
+      - name: 拉取内核源码
         run: |
-          git clone -b oneplus/mt6897_b_16.0.0_nord_ce5 https://github.com/kquieter-debug/Kernel_Oneplus_MT6897.git oneplus_kernel
-          echo "内核源码拉取完成"
-
-      - name: 让我康康目录在哪...
-        run: |
-          ls
-
-      - name: 生成配置文件 && 使用 Clang 开始构建内核
-        run: |
-          export PATH=$PATH:~/proton-clang/bin
-          export CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi- CLANG_TRIPLE=aarch64-linux-gnu-
+          # 替换为你实际的内核仓库地址（保持原有分支）
+          git clone --depth=1 -b oneplus/mt6897_b_16.0.0_nord_ce5 \
+            https://github.com/你的用户名/oneplus_kernel.git oneplus_kernel
           cd oneplus_kernel
-          make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC="ccache clang" LD="ld.lld" HOSTLD=ld.lld O=out KCFLAGS+=-O2 KCFLAGS+=-Wno-error gki_defconfig &&
-          make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC="$(pwd)/cc-wrapper" LD="$(pwd)/ld-wrapper" HOSTLD=ld.lld O=out KCFLAGS+=-O2 KCFLAGS+=-Wno-error Image
-          echo "内核编译完成"
+          # 验证源码拉取成功
+          ls -la && pwd
 
-      - name: 使用AnyKernel3打包内核
+      # 步骤6：生成配置并编译内核（核心修复点）
+      - name: 生成配置 & 编译内核
         run: |
-          git clone --depth 1 https://github.com/AnyKernel/AnyKernel3.git
-          cd AnyKernel3
-          cp -f ${GITHUB_WORKSPACE}/oneplus_kernel/out/arch/arm64/boot/Image.gz-dtb ramdisk/
-          cd ..
-          sed -i 's/do.devicecheck=1/do.devicecheck=0/g' AnyKernel3/anykernel.sh						# 不检测设备的名称
-          sed -i 's!BLOCK=/dev/block/platform/omap/omap_hsmmc.0/by-name/boot;!BLOCK=auto;!g' AnyKernel3/anykernel.sh	# 自动选择内核分区
-          sed -i 's/IS_SLOT_DEVICE=0;/IS_SLOT_DEVICE=auto;/g' AnyKernel3/anykernel.sh
-          zip -r9 ${GITHUB_WORKSPACE}/oneplus_kernel/oneplus_kernel_nord_ce5.zip AnyKernel3/*
+          cd oneplus_kernel
+          # 创建编译输出目录
+          mkdir -p out
+          
+          # 生成gki_defconfig配置（修复编译器指定）
+          echo "===== 开始生成配置文件 ====="
+          make O=out ARCH=arm64 \
+            CC=clang \
+            CLANG_TRIPLE=aarch64-linux-gnu- \
+            LD=ld.lld \
+            AR=llvm-ar \
+            NM=llvm-nm \
+            OBJCOPY=llvm-objcopy \
+            OBJDUMP=llvm-objdump \
+            STRIP=llvm-strip \
+            gki_defconfig
+          
+          # 编译内核镜像（使用全部CPU核心加速）
+          echo "===== 开始编译内核 ====="
+          make -j$(nproc --all) O=out ARCH=arm64 \
+            CC=clang \
+            CLANG_TRIPLE=aarch64-linux-gnu- \
+            LD=ld.lld \
+            AR=llvm-ar \
+            NM=llvm-nm \
+            OBJCOPY=llvm-objcopy \
+            OBJDUMP=llvm-objdump \
+            STRIP=llvm-strip \
+            Image.gz-dtb 2>&1 | tee compile.log
 
-      - name: 上传 AK3 打包的内核镜像
+          # 验证编译产物是否生成
+          echo "===== 编译产物列表 ====="
+          ls -la out/arch/arm64/boot/
+
+      # 步骤7：使用AnyKernel3打包内核
+      - name: AnyKernel3打包内核
+        run: |
+          # 克隆AnyKernel3仓库
+          git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git anykernel
+          
+          # 拷贝编译好的内核镜像到AnyKernel3目录
+          cp oneplus_kernel/out/arch/arm64/boot/Image.gz-dtb anykernel/
+          
+          # 修改AnyKernel3配置（适配设备）
+          cd anykernel
+          # 关闭设备检测、自动选择分区
+          sed -i 's/device.name1=.*/device.name1=*/' anykernel.sh
+          sed -i 's/block=/block=auto/' anykernel.sh
+          sed -i 's/is_slot_device=0/is_slot_device=auto/' anykernel.sh
+          
+          # 打包为ZIP文件
+          zip -r9 oneplus_kernel_nord_ce5.zip * -x .git README.md *.zip
+          
+          # 验证打包产物
+          ls -la *.zip
+
+      # 步骤8：上传编译产物
+      - name: 上传打包产物
         uses: actions/upload-artifact@v4
         with:
-          name: oneplus_kernel_nord_ce5.zip
-          path: oneplus_kernel/oneplus_kernel_nord_ce5.zip
+          name: oneplus_kernel_nord_ce5
+          path: anykernel/oneplus_kernel_nord_ce5.zip
+          retention-days: 7  # 产物保留7天
 
+      # 步骤9：清理构建产物（可选）
       - name: 清理构建产物
+        if: always()  # 无论编译成功/失败都执行清理
         run: |
-          cd oneplus_kernel
-          make ARCH=arm64 CC=clang O=out clean
+          rm -rf oneplus_kernel clang anykernel
+          sudo rm -rf /tmp/ccache
