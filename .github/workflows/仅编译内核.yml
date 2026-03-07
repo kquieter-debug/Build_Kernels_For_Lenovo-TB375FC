@@ -58,7 +58,7 @@ jobs:
 
       - name: 让我康康目录在哪...
         run: |
-          ls -l
+          ls
 
       - name: 生成配置文件 && 使用 Clang 开始构建内核
         run: |
