@@ -41,7 +41,7 @@ jobs:
             build-essential \
             zlib1g-dev \
             libncurses5-dev libssl-dev libxml2-utils \
-            clang llvm               #怎么写成这样...
+            clang llvm
 
       - name: 拉取交叉编译链
         run: |
@@ -58,7 +58,7 @@ jobs:
 
       - name: 生成配置文件 && 使用 Clang 开始构建内核
         run: |
-          make ARCH=arm64 CC=clang O=out lmi_defconfig
+          make ARCH=arm64 CC=clang O=out defconfig
           make ARCH=arm64 CC=clang O=out -j12
             echo "内核编译完成"
 
