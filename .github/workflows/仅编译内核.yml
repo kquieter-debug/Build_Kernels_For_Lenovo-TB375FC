@@ -27,24 +27,17 @@ jobs:
       # 步骤3：安装完整依赖（含ccache+clang+交叉编译链）
       - name: 安装编译依赖
         run: |
-          # 更新系统源并安装所有必要工具
-          sudo apt update -y && sudo apt upgrade -y
-          sudo apt install -y \
-            ccache curl git build-essential libssl-dev \
-            python3 python3-pip flex bison bc libelf-dev \
-            llvm clang lld libclang-dev gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi \
-            zip unzip rsync device-tree-compiler
-
-          # 验证关键工具是否安装成功（便于排查问题）
-          echo "===== 验证工具版本 ====="
-          clang --version
-          ccache --version
-          aarch64-linux-gnu-gcc --version
-          ld.lld --version
-
-          # 配置环境变量，确保编译器路径优先
-          echo "PATH=/usr/lib/ccache:/usr/bin:$PATH" >> $GITHUB_ENV
-          echo "CCACHE_DIR=/tmp/ccache" >> $GITHUB_ENV
+          sudo apt-get update
+          sudo apt-get install -y \
+            curl build-essential git \
+            openjdk-11-jdk \
+            wget bison flex libssl-dev \
+            unzip \
+            python3 python3-pip python3-setuptools \
+            build-essential \
+            zlib1g-dev \
+            libncurses5-dev libssl-dev libxml2-utils \
+            clang llvm lld
 
       # 步骤4：拉取Proton Clang编译链（可选，若系统clang版本不足则用这个）
       - name: 拉取Proton Clang编译链
