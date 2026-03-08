@@ -53,12 +53,9 @@ jobs:
       # 步骤5：拉取内核源码
       - name: 拉取内核源码
         run: |
-          # 替换为你实际的内核仓库地址（保持原有分支）
-          git clone --depth=1 -b oneplus/mt6897_b_16.0.0_nord_ce5 \
-            https://github.com/kquieter-debug/Kernel_Oneplus_MT6897.git oneplus_kernel
+          git clone https://github.com/kquieter-debug/Kernel_Oneplus_MT6897.git --depth=1 -b oneplus/mt6897_b_16.0.0_nord_ce5 oneplus_kernel
           cd oneplus_kernel
-          # 验证源码拉取成功
-          ls -la && pwd
+          ls -la
 
       # 步骤6：生成配置并编译内核（核心修复点）
       - name: 生成配置 & 编译内核
