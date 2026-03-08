@@ -55,7 +55,7 @@ jobs:
         run: |
           # 替换为你实际的内核仓库地址（保持原有分支）
           git clone --depth=1 -b oneplus/mt6897_b_16.0.0_nord_ce5 \
-            https://github.com/你的用户名/oneplus_kernel.git oneplus_kernel
+            https://github.com/kquieter-debug/oneplus_kernel.git oneplus_kernel
           cd oneplus_kernel
           # 验证源码拉取成功
           ls -la && pwd
