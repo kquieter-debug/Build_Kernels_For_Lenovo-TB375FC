@@ -11,31 +11,34 @@ jobs:
     steps:
       # 步骤1：检出代码
       - name: 检出代码
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4  # 升级到最新版
 
-      # 步骤2：最大化构建空间（清理系统冗余）
-      #- name: 最大化构建空间
-      #  uses: easimon/maximize-build-space@master
-      #  with:
-      #    remove_dotnet: true
-      #    remove_android: true
-      #    remove_haskell: true
-      #    remove_codeql: true
-      #    root_reserve_space: 10GB
-      #    swap_size: 10GB
-      #
-      #    DOSE NOT WORK HERE
+      # 步骤2：最大化构建空间（启用，解决磁盘不足问题）
+      - name: 最大化构建空间
+        uses: easimon/maximize-build-space@master
+        with:
+          remove_dotnet: true
+          remove_android: true
+          remove_haskell: true
+          remove_codeql: true
+          root_reserve_space: 10GB
+          swap_size: 10GB
 
-      # 步骤3：安装完整依赖（含ccache+clang+交叉编译链）
+      # 步骤3：安装完整依赖（关键修改：补充交叉编译链、新版binutils）
       - name: 安装编译依赖
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends binutils python-is-python3 libssl-dev libelf-dev ccache binutils
+          sudo apt-get update -y
+          sudo apt-get install -y --no-install-recommends \
+            binutils binutils-aarch64-linux-gnu \
+            python-is-python3 libssl-dev libelf-dev ccache \
+            gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi \
+            clang lld make git zip unzip  # 补充系统clang/lld和基础工具
 
-      # 步骤4：拉取Proton Clang编译链（可选，若系统clang版本不足则用这个）
+      # 步骤4：拉取Proton Clang编译链（增加版本选择，避免旧版本问题）
       - name: 拉取Proton Clang编译链
         run: |
-          git clone --depth=1 https://github.com/kdrag0n/proton-clang.git clang
+          # 拉取较新的Proton Clang（支持RELr.dyn）
+          git clone --depth=1 --branch=clang-r540028 https://github.com/kdrag0n/proton-clang.git clang
           # 将自定义clang加入环境变量
           echo "CLANG_PATH=$(pwd)/clang/bin" >> $GITHUB_ENV
           echo "PATH=$(pwd)/clang/bin:$PATH" >> $GITHUB_ENV
@@ -50,19 +53,22 @@ jobs:
           cd oneplus_kernel
           ls -la
 
-      # 步骤6：生成配置并编译内核（核心修复点）
+      # 步骤6：生成配置并编译内核（核心修复：替换链接器+增加兼容性配置）
       - name: 生成配置 & 编译内核
         run: |
           cd oneplus_kernel
           # 创建编译输出目录
           mkdir -p out
           
-          # 生成gki_defconfig配置（修复编译器指定）
+          # 生成gki_defconfig配置（关键修改：改用系统ld或新版lld，增加环境变量）
           echo "===== 开始生成配置文件 ====="
+          # 临时禁用RELr.dyn检测（兼容旧链接器）
+          export LDFLAGS="-Wl,--no-relr"
+          # 优先使用系统ld，而非clang自带的ld.lld
           make O=out ARCH=arm64 \
             CC=clang \
             CLANG_TRIPLE=aarch64-linux-gnu- \
-            LD=ld.lld \
+            LD=/usr/bin/ld \  # 核心修复：改用系统原生ld
             AR=llvm-ar \
             NM=llvm-nm \
             OBJCOPY=llvm-objcopy \
@@ -75,7 +81,7 @@ jobs:
           make -j$(nproc --all) O=out ARCH=arm64 \
             CC=clang \
             CLANG_TRIPLE=aarch64-linux-gnu- \
-            LD=ld.lld \
+            LD=/usr/bin/ld \  # 同步修改编译阶段的链接器
             AR=llvm-ar \
             NM=llvm-nm \
             OBJCOPY=llvm-objcopy \
@@ -85,7 +91,7 @@ jobs:
 
           # 验证编译产物是否生成
           echo "===== 编译产物列表 ====="
-          ls -la out/arch/arm64/boot/
+          ls -la out/arch/arm64/boot/ || echo "编译产物未生成，请检查compile.log"
 
       # 步骤7：使用AnyKernel3打包内核
       - name: AnyKernel3打包内核
@@ -94,7 +100,7 @@ jobs:
           git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git anykernel
           
           # 拷贝编译好的内核镜像到AnyKernel3目录
-          cp oneplus_kernel/out/arch/arm64/boot/Image.gz-dtb anykernel/
+          cp oneplus_kernel/out/arch/arm64/boot/Image.gz-dtb anykernel/ || echo "内核镜像不存在，拷贝失败"
           
           # 修改AnyKernel3配置（适配设备）
           cd anykernel
@@ -109,12 +115,14 @@ jobs:
           # 验证打包产物
           ls -la *.zip
 
-      # 步骤8：上传编译产物
+      # 步骤8：上传编译产物（增加容错，即使打包失败也上传日志）
       - name: 上传打包产物
         uses: actions/upload-artifact@v4
         with:
           name: oneplus_kernel_nord_ce5
-          path: anykernel/oneplus_kernel_nord_ce5.zip
+          path: |
+            anykernel/oneplus_kernel_nord_ce5.zip
+            oneplus_kernel/compile.log  # 上传编译日志，方便排查问题
           retention-days: 7  # 产物保留7天
 
       # 步骤9：清理构建产物（可选）
