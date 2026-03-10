@@ -34,7 +34,7 @@ jobs:
             binutils binutils-aarch64-linux-gnu \
             python-is-python3 libssl-dev libelf-dev ccache \
             gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi \
-            clang lld make git zip unzip  # 补充系统clang/lld和基础工具
+            clang lld make git zip unzip
 
       - name: 拉取Proton Clang编译链
         run: |
