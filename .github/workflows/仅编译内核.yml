@@ -1,19 +1,22 @@
+#############################
+#   Written by Muffin_Joe   #
+#############################
+#     I wrote this sh*t     #
+#############################
+#    AI真是写得一坨好石啊！   #
+#############################
 name: 仅编译内核
 
-# 仅手动触发工作流
 on:
   workflow_dispatch:
 
-# 运行环境
 jobs:
   build_kernel:
     runs-on: ubuntu-latest
     steps:
-      # 步骤1：检出代码
       - name: 检出代码
-        uses: actions/checkout@v4  # 升级到最新版
+        uses: actions/checkout@v4
 
-      # 步骤2：最大化构建空间（启用，解决磁盘不足问题）
       - name: 最大化构建空间
         uses: easimon/maximize-build-space@master
         with:
@@ -24,7 +27,6 @@ jobs:
           root_reserve_space: 10GB
           swap_size: 10GB
 
-      # 步骤3：安装完整依赖（关键修改：补充交叉编译链、新版binutils）
       - name: 安装编译依赖
         run: |
           sudo apt-get update -y
@@ -34,11 +36,10 @@ jobs:
             gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi \
             clang lld make git zip unzip  # 补充系统clang/lld和基础工具
 
-      # 步骤4：拉取Proton Clang编译链（增加版本选择，避免旧版本问题）
       - name: 拉取Proton Clang编译链
         run: |
           # 拉取较新的Proton Clang（支持RELr.dyn）
-          git clone --depth=1 --branch=clang-r540028 https://github.com/kdrag0n/proton-clang.git clang
+          git clone --depth=1 https://github.com/kdrag0n/proton-clang.git clang
           # 将自定义clang加入环境变量
           echo "CLANG_PATH=$(pwd)/clang/bin" >> $GITHUB_ENV
           echo "PATH=$(pwd)/clang/bin:$PATH" >> $GITHUB_ENV
@@ -46,14 +47,12 @@ jobs:
           echo "CROSS_COMPILE=aarch64-linux-gnu-" >> $GITHUB_ENV
           echo "CROSS_COMPILE_ARM32=arm-linux-gnueabi-" >> $GITHUB_ENV
 
-      # 步骤5：拉取内核源码
       - name: 拉取内核源码
         run: |
           git clone https://github.com/kquieter-debug/Kernel_Oneplus_MT6897.git --depth=1 -b oneplus/mt6897_b_16.0.0_nord_ce5 oneplus_kernel
           cd oneplus_kernel
           ls -la
 
-      # 步骤6：生成配置并编译内核（核心修复：替换链接器+增加兼容性配置）
       - name: 生成配置 & 编译内核
         run: |
           cd oneplus_kernel
@@ -93,7 +92,6 @@ jobs:
           echo "===== 编译产物列表 ====="
           ls -la out/arch/arm64/boot/ || echo "编译产物未生成，请检查compile.log"
 
-      # 步骤7：使用AnyKernel3打包内核
       - name: AnyKernel3打包内核
         run: |
           # 克隆AnyKernel3仓库
@@ -115,7 +113,6 @@ jobs:
           # 验证打包产物
           ls -la *.zip
 
-      # 步骤8：上传编译产物（增加容错，即使打包失败也上传日志）
       - name: 上传打包产物
         uses: actions/upload-artifact@v4
         with:
@@ -123,11 +120,10 @@ jobs:
           path: |
             anykernel/oneplus_kernel_nord_ce5.zip
             oneplus_kernel/compile.log  # 上传编译日志，方便排查问题
-          retention-days: 7  # 产物保留7天
+          retention-days: 7
 
-      # 步骤9：清理构建产物（可选）
       - name: 清理构建产物
-        if: always()  # 无论编译成功/失败都执行清理
+        if: always()  
         run: |
           rm -rf oneplus_kernel clang anykernel
           sudo rm -rf /tmp/ccache
