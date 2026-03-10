@@ -64,30 +64,8 @@ jobs:
           # 临时禁用RELr.dyn检测（兼容旧链接器）
           export LDFLAGS="-Wl,--no-relr"
           # 优先使用系统ld，而非clang自带的ld.lld
-          make O=out ARCH=arm64 \
-            CC=clang \
-            CLANG_TRIPLE=aarch64-linux-gnu- \
-            LD=/usr/bin/ld \  # 核心修复：改用系统原生ld
-            AR=llvm-ar \
-            NM=llvm-nm \
-            OBJCOPY=llvm-objcopy \
-            OBJDUMP=llvm-objdump \
-            STRIP=llvm-strip \
-            gki_defconfig
-          
-          # 编译内核镜像（使用全部CPU核心加速）
-          echo "===== 开始编译内核 ====="
-          make -j$(nproc --all) O=out ARCH=arm64 \
-            CC=clang \
-            CLANG_TRIPLE=aarch64-linux-gnu- \
-            LD=/usr/bin/ld \  # 同步修改编译阶段的链接器
-            AR=llvm-ar \
-            NM=llvm-nm \
-            OBJCOPY=llvm-objcopy \
-            OBJDUMP=llvm-objdump \
-            STRIP=llvm-strip \
-            Image.gz-dtb 2>&1 | tee compile.log
-
+          make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC="ccache clang" LD="ld.lld" HOSTLD=ld.lld O=out KCFLAGS+=-O2 KCFLAGS+=-Wno-error gki_defconfig &&
+          make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC="$(pwd)/cc-wrapper" LD="$(pwd)/ld-wrapper" HOSTLD=ld.lld O=out KCFLAGS+=-O2 KCFLAGS+=-Wno-error Image
           # 验证编译产物是否生成
           echo "===== 编译产物列表 ====="
           ls -la out/arch/arm64/boot/ || echo "编译产物未生成，请检查compile.log"
