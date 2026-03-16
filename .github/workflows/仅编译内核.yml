@@ -29,20 +29,23 @@ jobs:
 
       - name: 安装编译依赖
         run: |
-          sudo apt-get update -y
+          rm -rf kernel_workspace
+          mkdir kernel_workspace
+          cd kernel_workspace
+          
+          sudo apt-mark hold firefox &&
+          sudo apt-mark hold libc-bin &&
+          sudo apt purge man-db &&
+          sudo rm -rf /var/lib/man-db/auto-update &&
+          sudo apt update &&
           sudo apt-get install -y --no-install-recommends binutils python-is-python3 libssl-dev libelf-dev ccache &
 
-      - name: 拉取Proton Clang编译链
+      - name: 拉取Android-Clang编译链
         run: |
-          # 拉取较新的Proton Clang（支持RELr.dyn）
-          git clone --depth=1 https://github.com/kdrag0n/proton-clang.git clang
-          # 将自定义clang加入环境变量
-          echo "CLANG_PATH=$(pwd)/clang/bin" >> $GITHUB_ENV
-          echo "PATH=$(pwd)/clang/bin:$PATH" >> $GITHUB_ENV
-          # 配置交叉编译前缀
-          echo "CROSS_COMPILE=aarch64-linux-gnu-" >> $GITHUB_ENV
-          echo "CROSS_COMPILE_ARM32=arm-linux-gnueabi-" >> $GITHUB_ENV
-
+          mkdir -p ~/android-clang && cd ~/android-clang
+          git clone https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86+archive/refs/tags/android-14.0.0_r54/clang-r498229b.tar.gz
+          tar -zxvf clang-r498229b.tar.gz
+          export PATH="$HOME/android-clang/clang-r498229b/bin:$PATH"
       - name: 拉取内核源码
         run: |
           git clone https://github.com/kquieter-debug/Kernel_Oneplus_MT6897.git --depth=1 -b oneplus/mt6897_b_16.0.0_nord_ce5 oneplus_kernel
