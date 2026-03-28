@@ -40,15 +40,12 @@ jobs:
           sudo apt update &&
           sudo apt-get install -y --no-install-recommends binutils python-is-python3 libssl-dev libelf-dev ccache &
 
-      - name: 下载LLVM编译链
-        run: |
-          mkdir -p ~/llvm && cd ~/llvm
-          gh release download "LLVM 22.1.2" \
-            --repo "llvm/llvm-project" \
-            --pattern "LLVM-22.1.2-Linux-X64.tar.xz" \
-            --clobber
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: 下载 LLVM Release
+        uses: robinraju/release-downloader@v1
+        with:
+          repository: "llvm/llvm-project"
+          release: "LLVM 22.1.2"
+          fileName: "LLVM-22.1.2-Linux-X64.tar.xz"
 
       - name: 解压LLVM编译链
         run: |
