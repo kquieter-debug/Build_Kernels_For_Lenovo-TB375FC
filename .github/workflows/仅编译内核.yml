@@ -43,6 +43,7 @@ jobs:
       - name: 下载 LLVM Release
         uses: robinraju/release-downloader@v1
         with:
+          mkdir: llvm
           repository: "llvm/llvm-project"
           tag: "llvmorg-22.1.2"
           fileName: "LLVM-22.1.2-Linux-X64.tar.xz"
