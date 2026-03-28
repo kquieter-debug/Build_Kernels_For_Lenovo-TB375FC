@@ -50,7 +50,7 @@ jobs:
           repository: "llvm/llvm-project"
           tag: "llvmorg-22.1.2"
           fileName: "LLVM-22.1.2-Linux-X64.tar.xz"
-          out-file-path: "~/llvm"
+          out-file-path: "~/llvm/LLVM-22.1.2-Linux-X64.tar.xz"
 
       - name: 解压LLVM编译链
         run: |
