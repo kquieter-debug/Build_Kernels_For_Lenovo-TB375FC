@@ -43,7 +43,10 @@ jobs:
       - name: 拉取LLVM编译链
         run: |
           mkdir -p ~/llvm && cd ~/llvm
-          curl -fsSL "https://github.com/llvm/llvm-project/releases/download/LLVM%2022.1.2/LLVM-22.1.2-Linux-X64.tar.xz" -o LLVM-22.1.2-Linux-X64.tar.xz
+          gh release download "LLVM 22.1.2" \
+            --repo "llvm/llvm-project" \
+            --pattern "LLVM-22.1.2-Linux-X64.tar.xz" \
+            --clobber
           tar -xf LLVM-22.1.2-Linux-X64.tar.xz --strip-components=1
           export PATH="$HOME/llvm/bin:$PATH"
           echo "LLVM版本: $(clang --version | head -n 1)"
