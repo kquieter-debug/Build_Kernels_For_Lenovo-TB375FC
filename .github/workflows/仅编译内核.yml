@@ -40,19 +40,23 @@ jobs:
           sudo apt update &&
           sudo apt-get install -y --no-install-recommends binutils python-is-python3 libssl-dev libelf-dev ccache &
 
+      - name: 创建llvm目录
+        run: |
+          mkdir -p ~/llvm
+
       - name: 下载 LLVM Release
         uses: robinraju/release-downloader@v1
         with:
-          mkdir: llvm
           repository: "llvm/llvm-project"
           tag: "llvmorg-22.1.2"
           fileName: "LLVM-22.1.2-Linux-X64.tar.xz"
+          out-file-path: "~/llvm"
 
       - name: 解压LLVM编译链
         run: |
           cd ~/llvm
           tar -xf LLVM-22.1.2-Linux-X64.tar.xz --strip-components=1
-          export PATH="$HOME/llvm/bin:$PATH"
+          echo "$HOME/llvm/bin" >> $GITHUB_PATH
           echo "LLVM版本: $(clang --version | head -n 1)"
 
       - name: 拉取内核源码
