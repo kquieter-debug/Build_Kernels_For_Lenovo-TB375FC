@@ -44,7 +44,7 @@ jobs:
         uses: robinraju/release-downloader@v1
         with:
           repository: "llvm/llvm-project"
-          release: "llvmorg-22.1.2"
+          tag: "llvmorg-22.1.2"
           fileName: "LLVM-22.1.2-Linux-X64.tar.xz"
 
       - name: 解压LLVM编译链
